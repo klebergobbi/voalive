@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
   transpilePackages: ['@reservasegura/ui', '@reservasegura/database', '@reservasegura/types'],
   images: {
     domains: ['localhost'],

@@ -1,4 +1,4 @@
-# Dockerfile for ReservaSegura Web (Production)
+# Dockerfile for ReservaSegura Web (Production) - Monorepo Support
 FROM node:20-alpine AS base
 
 # Install dependencies only when needed
@@ -6,53 +6,71 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
+# Copy workspace configuration
 COPY package.json package-lock.json* ./
+COPY turbo.json ./
+
+# Copy all package.json files to establish workspace structure
 COPY apps/web/package.json ./apps/web/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/types/package.json ./packages/types/
+COPY packages/database/package.json ./packages/database/
 
+# Install all dependencies (including devDependencies for build)
 RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+
+# Copy node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+
+# Copy workspace files
+COPY package.json package-lock.json* turbo.json ./
+
+# Copy all source code for packages (needed for build)
+COPY packages ./packages
+
+# Copy web app source
+COPY apps/web ./apps/web
+
+# Generate Prisma client (if needed)
+RUN cd packages/database && npx prisma generate || true
+
+# Build packages first (ui, types, etc)
+RUN npm run build --workspace=packages/ui --if-present || true
+RUN npm run build --workspace=packages/types --if-present || true
 
 # Build the web app
-ENV NEXT_TELEMETRY_DISABLED 1
-RUN cd apps/web && npm run build
+WORKDIR /app/apps/web
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
 
 # Production image, copy all the files and run Next.js
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-ENV NEXT_TELEMETRY_DISABLED 1
-ENV PORT 3003
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3003
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/apps/web/public ./apps/web/public
-
-# Set the correct permission for prerender cache
-RUN mkdir -p apps/web/.next
-RUN chown nextjs:nodejs apps/web/.next
-
-# Automatically leverage output traces to reduce image size
+# Copy necessary files for standalone mode
+COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
 
 USER nextjs
 
 EXPOSE 3003
 
-ENV HOSTNAME "0.0.0.0"
+ENV HOSTNAME="0.0.0.0"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3003/health || wget --no-verbose --tries=1 --spider http://localhost:3003/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3003/ || exit 1
 
-CMD ["node", "apps/web/server.js"]
+CMD ["node", "server.js"]

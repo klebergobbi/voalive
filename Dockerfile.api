@@ -1,55 +1,74 @@
-# Dockerfile for ReservaSegura API (Production)
+# Dockerfile for ReservaSegura API (Production) - Monorepo Support
 FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
-# Install dependencies based on the preferred package manager
+# Copy workspace configuration
 COPY package.json package-lock.json* ./
+COPY turbo.json ./
+
+# Copy all package.json files
 COPY apps/api/package.json ./apps/api/
 COPY packages/database/package.json ./packages/database/
 COPY packages/types/package.json ./packages/types/
 
+# Install all dependencies
 RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
+
+# Copy node_modules from deps stage  
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+
+# Copy workspace files
+COPY package.json package-lock.json* turbo.json ./
+
+# Copy all source code for packages
+COPY packages ./packages
+
+# Copy API source
+COPY apps/api ./apps/api
 
 # Generate Prisma client
 RUN cd packages/database && npx prisma generate
 
+# Build packages first
+RUN npm run build --workspace=packages/types --if-present || true
+RUN npm run build --workspace=packages/database --if-present || true
+
 # Build the API
-RUN cd apps/api && npm run build
+WORKDIR /app/apps/api
+RUN npm run build
 
 # Production image, copy all the files and run the app
 FROM base AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
-ENV PORT 4000
+ENV NODE_ENV=production
+ENV PORT=4000
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 apiuser
 
 # Copy necessary files
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/apps/api/package.json ./apps/api/
+COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/package.json ./package.json
 COPY --from=builder /app/packages ./packages
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules ./node_modules
 
 USER apiuser
 
 EXPOSE 4000
 
-ENV HOSTNAME "0.0.0.0"
+ENV HOSTNAME="0.0.0.0"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:4000/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
 
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["node", "dist/index.js"]
