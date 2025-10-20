@@ -1,0 +1,136 @@
+# Comandos para Deploy Manual do VoaLive
+# Execute estes comandos um por um no console da Digital Ocean
+
+# ==========================================
+# PARTE 1: INSTALAR DEPENDÊNCIAS
+# ==========================================
+
+# Atualizar sistema
+apt-get update && apt-get upgrade -y
+
+# Instalar Docker
+curl -fsSL https://get.docker.com -o get-docker.sh && sh get-docker.sh && rm get-docker.sh
+
+# Instalar Docker Compose
+curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
+
+# Instalar outras ferramentas
+apt-get install -y git curl wget nano ufw
+
+# Configurar firewall
+ufw --force enable && ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp && ufw reload
+
+# Verificar instalação
+docker --version && docker-compose --version
+
+# ==========================================
+# PARTE 2: CLONAR OU PREPARAR PROJETO
+# ==========================================
+
+# Criar diretório
+mkdir -p /opt/voalive && cd /opt/voalive
+
+# OPÇÃO A: Se o projeto estiver no Git
+# git clone https://SEU_REPOSITORIO.git .
+
+# OPÇÃO B: Criar estrutura manualmente
+# (Você precisará copiar os arquivos via WinSCP ou console upload)
+
+# ==========================================
+# PARTE 3: CONFIGURAR VARIÁVEIS DE AMBIENTE
+# ==========================================
+
+cat > /opt/voalive/.env << 'EOF'
+# Database
+DATABASE_URL=postgresql://voalive_user:voalive_pass_prod_2024@postgres:5432/voalive
+
+# Redis
+REDIS_URL=redis://:voalive_redis_2024@redis:6379
+
+# Firecrawl API
+FIRECRAWL_API_KEY=fc-2dda7f7f0e2c4ccb816cb21e7f372410
+
+# JWT
+JWT_SECRET=voalive_jwt_secret_prod_2024_ultra_secure
+
+# NextAuth
+NEXTAUTH_SECRET=voalive_nextauth_secret_prod_2024
+NEXTAUTH_URL=https://voalive.com
+
+# API
+PORT=4000
+NODE_ENV=production
+AUTO_START_SCRAPER=true
+LOG_LEVEL=info
+
+# URLs
+NEXT_PUBLIC_API_URL=https://api.voalive.com
+EOF
+
+# ==========================================
+# PARTE 4: BUILD E DEPLOY
+# ==========================================
+
+cd /opt/voalive
+
+# Build das imagens (LEVA 10-15 MINUTOS)
+docker-compose -f docker-compose.prod.yml build --no-cache
+
+# Iniciar serviços
+docker-compose -f docker-compose.prod.yml up -d
+
+# Verificar status
+docker-compose -f docker-compose.prod.yml ps
+
+# Ver logs
+docker-compose -f docker-compose.prod.yml logs --tail=50
+
+# ==========================================
+# PARTE 5: MONITORAMENTO
+# ==========================================
+
+# Ver logs em tempo real
+docker-compose -f docker-compose.prod.yml logs -f
+
+# Ver status dos containers
+docker-compose -f docker-compose.prod.yml ps
+
+# Ver uso de recursos
+docker stats
+
+# Reiniciar um serviço específico
+docker-compose -f docker-compose.prod.yml restart voalive-api
+
+# Parar todos os serviços
+docker-compose -f docker-compose.prod.yml down
+
+# Iniciar todos os serviços
+docker-compose -f docker-compose.prod.yml up -d
+
+# ==========================================
+# COMANDOS ÚTEIS
+# ==========================================
+
+# Ver logs de um serviço específico
+docker-compose -f docker-compose.prod.yml logs -f voalive-api
+docker-compose -f docker-compose.prod.yml logs -f voalive-web
+docker-compose -f docker-compose.prod.yml logs -f postgres
+docker-compose -f docker-compose.prod.yml logs -f traefik
+
+# Acessar shell de um container
+docker-compose -f docker-compose.prod.yml exec voalive-api sh
+docker-compose -f docker-compose.prod.yml exec postgres psql -U voalive_user voalive
+
+# Limpar recursos Docker
+docker system prune -f
+
+# Backup do banco de dados
+docker-compose -f docker-compose.prod.yml exec postgres pg_dump -U voalive_user voalive > backup_$(date +%Y%m%d).sql
+
+# ==========================================
+# SEGURANÇA: DESABILITAR SENHA SSH
+# ==========================================
+
+# Após confirmar que tudo funciona, desabilitar senha SSH
+sed -i 's/PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+systemctl restart sshd

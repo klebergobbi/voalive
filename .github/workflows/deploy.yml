@@ -1,0 +1,206 @@
+name: Deploy VoaLive to Production
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME_API: voalive/api
+  IMAGE_NAME_WEB: voalive/web
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: voalive_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Generate Prisma client
+      run: cd packages/database && npx prisma generate
+
+    - name: Run database migrations
+      run: cd packages/database && npx prisma db push
+      env:
+        DATABASE_URL: postgresql://postgres:test_password@localhost:5432/voalive_test
+
+    - name: Run linting
+      run: npm run lint --if-present
+
+    - name: Run type checking
+      run: npm run type-check --if-present
+
+    - name: Run tests
+      run: npm test --if-present
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.DOCKER_REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for API
+      id: meta-api
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME_API }}
+        tags: |
+          type=ref,event=branch
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push API Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.api
+        push: true
+        tags: ${{ steps.meta-api.outputs.tags }}
+        labels: ${{ steps.meta-api.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Extract metadata for Web
+      id: meta-web
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_NAME_WEB }}
+        tags: |
+          type=ref,event=branch
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Web Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile.web
+        push: true
+        tags: ${{ steps.meta-web.outputs.tags }}
+        labels: ${{ steps.meta-web.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.8.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+    - name: Add server to known hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Create .env file
+      run: |
+        cat > .env.prod << EOF
+        NODE_ENV=production
+        DATABASE_URL=${{ secrets.DATABASE_URL }}
+        FIRECRAWL_API_KEY=${{ secrets.FIRECRAWL_API_KEY }}
+        JWT_SECRET=${{ secrets.JWT_SECRET }}
+        NEXTAUTH_SECRET=${{ secrets.NEXTAUTH_SECRET }}
+        NEXTAUTH_URL=${{ secrets.NEXTAUTH_URL }}
+        NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+        AUTO_START_SCRAPER=true
+        EOF
+
+    - name: Copy files to server
+      run: |
+        scp docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/voalive/
+        scp .env.prod ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/voalive/.env
+        scp -r monitoring/ ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/voalive/
+
+    - name: Deploy to production
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          cd /opt/voalive
+
+          # Login to container registry
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+          # Pull latest images
+          docker-compose -f docker-compose.prod.yml pull
+
+          # Run database migrations
+          docker-compose -f docker-compose.prod.yml run --rm voalive-api npx prisma db push
+
+          # Deploy with zero-downtime
+          docker-compose -f docker-compose.prod.yml up -d --no-deps --build
+
+          # Clean up old images
+          docker image prune -f
+
+          # Verify deployment
+          docker-compose -f docker-compose.prod.yml ps
+        EOF
+
+    - name: Run health checks
+      run: |
+        ssh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+          # Wait for services to be ready
+          sleep 30
+
+          # Check API health
+          curl -f https://api.voalive.com/health || exit 1
+
+          # Check Web health
+          curl -f https://voalive.com/ || exit 1
+
+          # Check metrics endpoint
+          curl -f https://api.voalive.com/metrics || exit 1
+
+          echo "✅ All health checks passed!"
+        EOF
+
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow

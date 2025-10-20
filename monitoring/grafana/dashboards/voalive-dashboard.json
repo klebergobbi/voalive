@@ -1,0 +1,201 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "VoaLive Production Monitoring",
+    "tags": ["reservasegura", "production", "monitoring"],
+    "style": "dark",
+    "timezone": "America/Sao_Paulo",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"reservasegura-api\"}",
+            "legendFormat": "API Status"
+          },
+          {
+            "expr": "up{job=\"reservasegura-web\"}",
+            "legendFormat": "Web Status"
+          },
+          {
+            "expr": "up{job=\"postgres-exporter\"}",
+            "legendFormat": "Database Status"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "fieldConfig": {
+          "defaults": {
+            "color": {"mode": "thresholds"},
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Flight Scraping Jobs",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"reservasegura-api\",endpoint=\"/api/v1/flight-scraper/scrape/flight\"}[5m])",
+            "legendFormat": "Flight Scrape Requests/sec"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"reservasegura-api\",endpoint=\"/api/v1/flight-scraper/scrape/airport\"}[5m])",
+            "legendFormat": "Airport Scrape Requests/sec"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Database Connections",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "pg_stat_database_numbackends{datname=\"reservasegura\"}",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "pg_settings_max_connections",
+            "legendFormat": "Max Connections"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+      },
+      {
+        "id": 4,
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"reservasegura-api\"}[5m]))",
+            "legendFormat": "API P95 Response Time"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"reservasegura-api\"}[5m]))",
+            "legendFormat": "API P50 Response Time"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+      },
+      {
+        "id": 5,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "process_resident_memory_bytes{job=\"reservasegura-api\"} / 1024 / 1024",
+            "legendFormat": "API Memory (MB)"
+          },
+          {
+            "expr": "process_resident_memory_bytes{job=\"reservasegura-web\"} / 1024 / 1024",
+            "legendFormat": "Web Memory (MB)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+      },
+      {
+        "id": 6,
+        "title": "CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"reservasegura-api\"}[5m]) * 100",
+            "legendFormat": "API CPU %"
+          },
+          {
+            "expr": "rate(process_cpu_seconds_total{job=\"reservasegura-web\"}[5m]) * 100",
+            "legendFormat": "Web CPU %"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+      },
+      {
+        "id": 7,
+        "title": "Scraped Flights Count",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "reservasegura_scraped_flights_total",
+            "legendFormat": "Total Scraped Flights"
+          },
+          {
+            "expr": "reservasegura_scraping_jobs_completed_total",
+            "legendFormat": "Completed Jobs"
+          },
+          {
+            "expr": "reservasegura_scraping_jobs_failed_total",
+            "legendFormat": "Failed Jobs"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}
+      },
+      {
+        "id": 8,
+        "title": "HTTP Status Codes",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"reservasegura-api\",code=\"200\"}[5m])",
+            "legendFormat": "200 OK"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"reservasegura-api\",code=\"404\"}[5m])",
+            "legendFormat": "404 Not Found"
+          },
+          {
+            "expr": "rate(http_requests_total{job=\"reservasegura-api\",code=\"500\"}[5m])",
+            "legendFormat": "500 Error"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}
+      },
+      {
+        "id": 9,
+        "title": "Disk Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "node_filesystem_avail_bytes{mountpoint=\"/\"} / 1024 / 1024 / 1024",
+            "legendFormat": "Available Disk (GB)"
+          },
+          {
+            "expr": "node_filesystem_size_bytes{mountpoint=\"/\"} / 1024 / 1024 / 1024",
+            "legendFormat": "Total Disk (GB)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32}
+      },
+      {
+        "id": 10,
+        "title": "Network I/O",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(node_network_receive_bytes_total[5m]) / 1024 / 1024",
+            "legendFormat": "Network In (MB/s)"
+          },
+          {
+            "expr": "rate(node_network_transmit_bytes_total[5m]) / 1024 / 1024",
+            "legendFormat": "Network Out (MB/s)"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32}
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 30,
+    "version": 0
+  }
+}

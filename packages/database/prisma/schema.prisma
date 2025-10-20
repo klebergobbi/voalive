@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  role          String    @default("USER")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  bookings      Booking[]
+  transactions  Transaction[]
+}
+
+model Flight {
+  id              String    @id @default(cuid())
+  flightNumber    String    @unique
+  origin          String
+  destination     String
+  departureTime   DateTime
+  arrivalTime     DateTime
+  airline         String
+  aircraft        String
+  availableSeats  Int
+  totalSeats      Int
+  basePrice       Float
+  status          String @default("SCHEDULED")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookings        Booking[]
+}
+
+model Booking {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  flight          Flight    @relation(fields: [flightId], references: [id])
+  flightId        String
+  bookingCode     String    @unique
+  passengers      String // JSON string
+  totalAmount     Float
+  status          String @default("PENDING")
+  paymentStatus   String @default("PENDING")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  transaction     Transaction?
+
+  @@index([userId])
+  @@index([flightId])
+}
+
+model Transaction {
+  id              String    @id @default(cuid())
+  booking         Booking   @relation(fields: [bookingId], references: [id])
+  bookingId       String    @unique
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  amount          Float
+  paymentMethod   String
+  transactionId   String    @unique
+  status          String @default("PENDING")
+  metadata        String? // JSON string
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// Enums converted to constants for SQLite compatibility
+// Role: USER, ADMIN, AGENT
+// FlightStatus: SCHEDULED, DELAYED, CANCELLED, BOARDING, DEPARTED, ARRIVED
+// BookingStatus: PENDING, CONFIRMED, CANCELLED, COMPLETED
+// PaymentStatus: PENDING, PROCESSING, PAID, FAILED, REFUNDED
+// TransactionStatus: PENDING, SUCCESS, FAILED, REFUNDED
+// DataSource: FLIGHTRADAR24, FLIGHTAWARE, MANUAL
+// JobStatus: PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
+
+model ScrapedFlight {
+  id              String    @id @default(cuid())
+  externalId      String    @unique
+  flightNumber    String
+  origin          String
+  destination     String
+  departureTime   DateTime
+  arrivalTime     DateTime?
+  airline         String
+  aircraft        String?
+  status          String
+  gate            String?
+  terminal        String?
+  delay           Int?      // minutes
+  source          String // FLIGHTRADAR24 or FLIGHTAWARE
+  lastUpdated     DateTime
+  rawData         String?   // JSON string - store original scraped data
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([flightNumber])
+  @@index([source])
+  @@index([lastUpdated])
+  @@index([origin, destination])
+}
+
+model ScrapingJob {
+  id            String    @id @default(cuid())
+  source        String
+  jobType       String    // 'flight_data', 'airport_data', etc
+  parameters    String?   // JSON string - search parameters, urls, etc
+  status        String @default("PENDING")
+  startedAt     DateTime?
+  completedAt   DateTime?
+  recordsCount  Int       @default(0)
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([source, status])
+  @@index([createdAt])
+}
+
+model Airport {
+  id              String    @id @default(cuid())
+  iataCode        String    @unique
+  icaoCode        String    @unique
+  name            String
+  city            String
+  country         String
+  timezone        String
+  coordinates     String?   // JSON string - lat, lng
+  lastUpdated     DateTime
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([iataCode])
+  @@index([icaoCode])
+  @@index([city, country])
+}
+

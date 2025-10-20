@@ -1,0 +1,15 @@
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/voalive
+
+# Firecrawl API Configuration
+FIRECRAWL_API_KEY=fc-2dda7f7f0e2c4ccb816cb21e7f372410
+
+# Server Configuration
+PORT=4000
+NODE_ENV=development
+
+# Scraping Configuration
+AUTO_START_SCRAPER=true
+
+# JWT Secret
+JWT_SECRET=your-jwt-secret-key-here
