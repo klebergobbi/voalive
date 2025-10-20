@@ -155,3 +155,76 @@ Todos os secrets necessários foram configurados:
 
 **Última atualização**: 2025-10-20  
 **Custo mensal**: $24/mês
+
+---
+
+## ⚠️ ACESSO INICIAL - SSH Key Setup
+
+O droplet foi criado sem SSH keys pré-configuradas. Para acessar:
+
+### Opção 1: Via Console Web (Mais Fácil)
+
+1. **Acesse o console**:
+   - URL: https://cloud.digitalocean.com/droplets/525312791
+   - Clique em "Access" → "Launch Droplet Console"
+   - O console web abrirá diretamente no navegador
+
+2. **Login**:
+   - User: `root`
+   - Password: Enviada por email da Digital Ocean
+
+3. **Adicionar sua SSH key**:
+   ```bash
+   mkdir -p ~/.ssh
+   cat > ~/.ssh/authorized_keys << 'SSHKEY'
+   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDf0o7TSj2BHE6Ly4Sw0U8HtllqNaYvGXclfYWQryl+U6G/W6Llu6CZaFVX1QviGA1wPjDxTbY7cs1hQ57jEKmZ7g1A6CdDe5ZLULITn9T2nEa8a69axMks1WB9NMTAv3Kfm0PZ71gR+U0AvwBmrdDeqqD+cNv9z8qmPnWNYlo9O+9q1XwpM5S68vYLNGCkTD1RvL39FV2mpJ418XsmZnhY4aLs1fKK/+aKzgJoyj+rgVh8TI47Ew9boZtKsAAgWcdvF8sPTQK/j8Q12tXE37SPd3WAZ3MYPHhIUAUX/bSCdO0ih1MTghNCLItok0k+WwDEgn8Xw+lll753MGj5IIQOoFDjiXV2vNCse1vlnaS5IfkWroUsQIW2iC6XLoyeRUSc+ZU47m9FvbSfDsYWrBXbIJNhAhWe/72XrYXdElDxxD85pElh+QdOKpYuJoiWyKybhsxWgzr9vvCW1pw+33PcKC1kYI8iuP5x8R3PwnNOudIMMhZnZ/VL68BMOtXKNTUaj/UDJSDew6D8dVsC4JX/bBf0mwcPdYd/D+y//z6mJv6zt0/C80lUI0kdIeKZNEo8tjbz8iH9PPKlH0CP+GeGh7yYnC2nD6J0keGDAeA0w6BxdX5x0lxwhHRrPFZgsRWxN3vnOEBBJC7NQioV8bfq/ipsmpjxoxPpTX5zu8B9AQ== klebergobbi@protonmail.com
+   SSHKEY
+   
+   chmod 600 ~/.ssh/authorized_keys
+   chmod 700 ~/.ssh
+   ```
+
+4. **Testar SSH**:
+   ```bash
+   ssh root@192.34.58.167
+   ```
+
+### Opção 2: Via Password Reset
+
+1. Acesse o dashboard: https://cloud.digitalocean.com/droplets/525312791
+2. Clique em "Access" → "Reset Root Password"
+3. Uma nova senha será enviada por email
+4. Use a senha para fazer login via SSH
+
+### Opção 3: Recriar Droplet (Se Necessário)
+
+Se preferir começar do zero com SSH key:
+
+```bash
+# 1. Destruir droplet atual
+
+# 2. Adicionar SSH key à conta (se ainda não existir)
+# 3. Recriar droplet com a key associada
+```
+
+---
+
+## 🚀 Deploy Manual (Após Acesso SSH)
+
+Uma vez com acesso SSH, execute:
+
+```bash
+# Conectar ao servidor
+ssh root@192.34.58.167
+
+# Verificar Docker
+docker --version
+docker-compose --version
+
+# Criar diretório da aplicação
+mkdir -p /opt/voalive
+cd /opt/voalive
+
+# Criar docker-compose.prod.yml
+cat > docker-compose.prod.yml << 'EOF'
+# Cole o conteúdo do docker-compose.prod.yml aqui
