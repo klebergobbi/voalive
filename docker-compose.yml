@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (Development)
+  postgres:
+    image: postgres:15-alpine
+    container_name: voalive-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: reservasegura_dev
+      POSTGRES_USER: reservasegura_user
+      POSTGRES_PASSWORD: dev_password_2024
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - voalive-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reservasegura_user -d reservasegura_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Caching (Development)
+  redis:
+    image: redis:7-alpine
+    container_name: voalive-redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass dev_redis_2024
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - voalive-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # VoaLive API (Development)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: voalive-api-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://reservasegura_user:dev_password_2024@postgres:5432/reservasegura_dev
+      REDIS_URL: redis://:dev_redis_2024@redis:6379
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+      AUTO_START_SCRAPER: "false"
+      JWT_SECRET: dev_jwt_secret_not_for_production
+      LOG_LEVEL: debug
+    ports:
+      - "3012:4000"
+    volumes:
+      - ./apps/api:/app/apps/api
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/api/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - voalive-dev-network
+    command: npm run dev
+
+  # VoaLive Web Frontend (Development)
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: voalive-web-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      NEXT_PUBLIC_API_URL: http://localhost:3012
+      NEXTAUTH_URL: http://localhost:3011
+      NEXTAUTH_SECRET: dev_nextauth_secret_not_for_production
+      DATABASE_URL: postgresql://reservasegura_user:dev_password_2024@postgres:5432/reservasegura_dev
+    ports:
+      - "3011:3003"
+    volumes:
+      - ./apps/web:/app/apps/web
+      - ./packages:/app/packages
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
+    depends_on:
+      - api
+      - postgres
+    networks:
+      - voalive-dev-network
+    command: npm run dev
+
+  # PgAdmin (Development Tool)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: voalive-pgadmin-dev
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@voalive.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_dev_data:/var/lib/pgadmin
+    networks:
+      - voalive-dev-network
+    depends_on:
+      - postgres
+
+  # Redis Commander (Development Tool)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: voalive-redis-commander-dev
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:dev_redis_2024
+    ports:
+      - "8081:8081"
+    networks:
+      - voalive-dev-network
+    depends_on:
+      - redis
+
+networks:
+  voalive-dev-network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:
+  pgadmin_dev_data:
