@@ -8,10 +8,11 @@ WORKDIR /app
 
 # Copy workspace configuration
 COPY package.json package-lock.json* ./
-COPY turbo.json ./
+COPY turbo.json tsconfig.json ./
 
 # Copy all package.json files to establish workspace structure
 COPY apps/web/package.json ./apps/web/
+COPY apps/web/tsconfig.json ./apps/web/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/types/package.json ./packages/types/
 COPY packages/database/package.json ./packages/database/
@@ -27,7 +28,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 
 # Copy workspace files
-COPY package.json package-lock.json* turbo.json ./
+COPY package.json package-lock.json* turbo.json tsconfig.json ./
 
 # Copy all source code for packages (needed for build)
 COPY packages ./packages
