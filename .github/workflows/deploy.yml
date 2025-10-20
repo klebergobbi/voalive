@@ -7,8 +7,8 @@ on:
 
 env:
   DOCKER_REGISTRY: ghcr.io
-  IMAGE_NAME_API: voalive/api
-  IMAGE_NAME_WEB: voalive/web
+  IMAGE_NAME_API: ${{ github.repository_owner }}/voalive-api
+  IMAGE_NAME_WEB: ${{ github.repository_owner }}/voalive-web
 
 jobs:
   test:
