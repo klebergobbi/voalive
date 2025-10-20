@@ -20,10 +20,12 @@
   },
   "packageManager": "npm@10.2.4",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
-    "turbo": "^2.5.8",
+    "turbo": "^2.5.8"
+  },
+  "optionalDependencies": {
     "turbo-windows-64": "^2.5.8"
   }
 }
