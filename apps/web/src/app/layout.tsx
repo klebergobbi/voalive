@@ -5,7 +5,7 @@ import '../styles/globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'VoaLive - Sistema de Gerenciamento de Voos',
+  title: 'Reserva Segura - Sistema de Gerenciamento de Voos',
   description: 'Plataforma completa para gerenciamento de voos e reservas',
 };
 
