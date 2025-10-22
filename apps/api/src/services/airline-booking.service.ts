@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { FirecrawlService } from './firecrawl.service';
 import { getRealFlightSearchService } from './real-flight-search.service';
+import { PrismaClient } from '@reservasegura/database';
 
 export interface BookingSearchRequest {
   localizador: string;
@@ -34,15 +35,25 @@ export interface BookingData {
 export class AirlineBookingService {
   private fireCrawlService: FirecrawlService;
   private realFlightSearch = getRealFlightSearchService();
+  private prisma: PrismaClient;
 
   constructor() {
     this.fireCrawlService = new FirecrawlService();
+    this.prisma = new PrismaClient();
   }
 
   async searchBooking(request: BookingSearchRequest): Promise<BookingData | null> {
     console.log(`🔍 Buscando reserva: ${request.localizador} - ${request.sobrenome}`);
 
-    // Tentar em cada companhia aérea
+    // PRIMEIRO: Buscar no banco de dados local
+    console.log('📊 Buscando no banco de dados local...');
+    const localBooking = await this.searchInDatabase(request);
+    if (localBooking) {
+      console.log('✅ Reserva encontrada no banco de dados local!');
+      return localBooking;
+    }
+
+    // SEGUNDO: Tentar em cada companhia aérea
     const airlines = ['GOL', 'LATAM', 'AZUL'] as const;
 
     for (const airline of airlines) {
@@ -104,13 +115,12 @@ export class AirlineBookingService {
         }
       }
 
-      // Fallback para dados de demonstração
-      console.log('⚠️ Usando dados de demonstração para GOL');
-      return this.generateMockFlightData('GOL', request);
+      // Não encontrado
+      console.log('❌ Reserva não encontrada na GOL');
+      return null;
     } catch (error) {
       console.error('Erro ao buscar na GOL:', error);
-      // Em caso de erro, retornar dados mock
-      return this.generateMockFlightData('GOL', request);
+      return null;
     }
   }
 
@@ -138,12 +148,12 @@ export class AirlineBookingService {
         }
       }
 
-      // Fallback para dados de demonstração
-      console.log('⚠️ Usando dados de demonstração para LATAM');
-      return this.generateMockFlightData('LATAM', request);
+      // Não encontrado
+      console.log('❌ Reserva não encontrada na LATAM');
+      return null;
     } catch (error) {
       console.error('Erro ao buscar na LATAM:', error);
-      return this.generateMockFlightData('LATAM', request);
+      return null;
     }
   }
 
@@ -171,12 +181,12 @@ export class AirlineBookingService {
         }
       }
 
-      // Fallback para dados de demonstração
-      console.log('⚠️ Usando dados de demonstração para Azul');
-      return this.generateMockFlightData('AZUL', request);
+      // Não encontrado
+      console.log('❌ Reserva não encontrada na Azul');
+      return null;
     } catch (error) {
       console.error('Erro ao buscar na Azul:', error);
-      return this.generateMockFlightData('AZUL', request);
+      return null;
     }
   }
 
@@ -229,46 +239,6 @@ export class AirlineBookingService {
     } catch {
       return '';
     }
-  }
-
-  private generateMockFlightData(airline: 'GOL' | 'LATAM' | 'AZUL', request: BookingSearchRequest): BookingData {
-    // Gerar dados realistas baseados no localizador
-    const airports = ['GRU', 'CGH', 'SDU', 'GIG', 'BSB', 'CWB', 'POA', 'REC', 'FOR', 'MAO'];
-    const origem = request.origem || airports[Math.floor(Math.random() * airports.length)];
-    const destino = airports.filter(a => a !== origem)[Math.floor(Math.random() * (airports.length - 1))];
-
-    // Gerar número de voo baseado na companhia
-    const prefixes = {
-      GOL: 'G3',
-      LATAM: 'LA',
-      AZUL: 'AD'
-    };
-    const flightNumber = `${prefixes[airline]}${Math.floor(Math.random() * 9000) + 1000}`;
-
-    // Gerar datas futuras
-    const departureDate = new Date();
-    departureDate.setDate(departureDate.getDate() + Math.floor(Math.random() * 30) + 1);
-    const arrivalDate = new Date(departureDate);
-    arrivalDate.setHours(departureDate.getHours() + Math.floor(Math.random() * 4) + 1);
-
-    return {
-      localizador: request.localizador.toUpperCase(),
-      sobrenome: request.sobrenome.toUpperCase(),
-      origem: origem,
-      destino: destino,
-      dataPartida: departureDate.toISOString().split('T')[0],
-      dataChegada: arrivalDate.toISOString().split('T')[0],
-      horarioPartida: `${departureDate.getHours().toString().padStart(2, '0')}:${departureDate.getMinutes().toString().padStart(2, '0')}`,
-      horarioChegada: `${arrivalDate.getHours().toString().padStart(2, '0')}:${arrivalDate.getMinutes().toString().padStart(2, '0')}`,
-      numeroVoo: flightNumber,
-      companhia: airline,
-      status: 'CONFIRMADO',
-      portaoEmbarque: `${Math.floor(Math.random() * 20) + 1}`,
-      terminal: Math.random() > 0.5 ? '1' : '2',
-      assento: `${Math.floor(Math.random() * 30) + 1}${['A', 'B', 'C', 'D', 'E', 'F'][Math.floor(Math.random() * 6)]}`,
-      classe: 'ECONÔMICA',
-      passageiro: request.sobrenome.toUpperCase()
-    };
   }
 
 
@@ -367,6 +337,98 @@ export class AirlineBookingService {
 
     // Padrão padrão
     return 'GOL';
+  }
+
+  /**
+   * Busca reserva no banco de dados local
+   */
+  private async searchInDatabase(request: BookingSearchRequest): Promise<BookingData | null> {
+    try {
+      const bookingCode = request.localizador.toUpperCase().trim();
+
+      // Buscar no banco de dados
+      const booking = await this.prisma.booking.findFirst({
+        where: {
+          bookingCode: bookingCode
+        },
+        include: {
+          flight: true,
+          user: true
+        }
+      });
+
+      if (!booking) {
+        console.log('❌ Reserva não encontrada no banco de dados local');
+        return null;
+      }
+
+      // Verificar sobrenome
+      const passengers = JSON.parse(booking.passengers || '[]');
+      const passengerMatch = passengers.some((p: any) =>
+        p.lastName?.toUpperCase() === request.sobrenome.toUpperCase()
+      );
+
+      if (!passengerMatch && booking.user?.name) {
+        // Verificar se o sobrenome está no nome do usuário
+        const userLastName = booking.user.name.split(' ').pop()?.toUpperCase();
+        if (userLastName !== request.sobrenome.toUpperCase()) {
+          console.log('❌ Sobrenome não corresponde à reserva');
+          return null;
+        }
+      }
+
+      // Converter para BookingData
+      const passenger = passengers[0] || { firstName: booking.user?.name || '', lastName: request.sobrenome };
+
+      return {
+        localizador: booking.bookingCode,
+        sobrenome: passenger.lastName || request.sobrenome,
+        origem: booking.flight.origin,
+        destino: booking.flight.destination,
+        dataPartida: booking.flight.departureTime.toISOString().split('T')[0],
+        dataChegada: booking.flight.arrivalTime.toISOString().split('T')[0],
+        horarioPartida: booking.flight.departureTime.toISOString().split('T')[1].substring(0, 5),
+        horarioChegada: booking.flight.arrivalTime.toISOString().split('T')[1].substring(0, 5),
+        numeroVoo: booking.flight.flightNumber,
+        companhia: this.mapAirlineCode(booking.flight.airline),
+        status: this.mapBookingStatus(booking.status),
+        classe: 'ECONÔMICA',
+        passageiro: `${passenger.firstName || ''} ${passenger.lastName || ''}`.trim(),
+        documento: passenger.document,
+        telefone: passenger.phone,
+        email: passenger.email || booking.user?.email
+      };
+    } catch (error) {
+      console.error('❌ Erro ao buscar no banco de dados:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Mapeia código da companhia aérea
+   */
+  private mapAirlineCode(airline: string): 'GOL' | 'LATAM' | 'AZUL' {
+    const upper = airline.toUpperCase();
+
+    if (upper.includes('GOL') || upper.includes('G3')) return 'GOL';
+    if (upper.includes('LATAM') || upper.includes('LA') || upper.includes('TAM')) return 'LATAM';
+    if (upper.includes('AZUL') || upper.includes('AD')) return 'AZUL';
+
+    return 'GOL'; // default
+  }
+
+  /**
+   * Mapeia status da reserva
+   */
+  private mapBookingStatus(status: string): string {
+    const statusMap: { [key: string]: string } = {
+      'PENDING': 'PENDENTE',
+      'CONFIRMED': 'CONFIRMADO',
+      'CANCELLED': 'CANCELADO',
+      'COMPLETED': 'CONCLUÍDO'
+    };
+
+    return statusMap[status] || status;
   }
 }
 
