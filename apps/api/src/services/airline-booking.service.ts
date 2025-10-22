@@ -340,7 +340,7 @@ export class AirlineBookingService {
   }
 
   /**
-   * Busca reserva no banco de dados local
+   * Busca reserva no banco de dados local e enriquece com dados atualizados do voo
    */
   private async searchInDatabase(request: BookingSearchRequest): Promise<BookingData | null> {
     try {
@@ -377,10 +377,10 @@ export class AirlineBookingService {
         }
       }
 
-      // Converter para BookingData
+      // Converter para BookingData base
       const passenger = passengers[0] || { firstName: booking.user?.name || '', lastName: request.sobrenome };
 
-      return {
+      const baseBookingData: BookingData = {
         localizador: booking.bookingCode,
         sobrenome: passenger.lastName || request.sobrenome,
         origem: booking.flight.origin,
@@ -398,6 +398,36 @@ export class AirlineBookingService {
         telefone: passenger.phone,
         email: passenger.email || booking.user?.email
       };
+
+      // ENRIQUECER com dados REAIS e ATUALIZADOS do voo
+      console.log('🔄 Enriquecendo reserva com dados atualizados do voo:', booking.flight.flightNumber);
+      try {
+        const liveFlightData = await this.realFlightSearch.searchRealFlightByNumber(booking.flight.flightNumber);
+
+        if (liveFlightData) {
+          console.log('✅ Dados atualizados do voo obtidos!');
+
+          // Atualizar com dados em tempo real
+          return {
+            ...baseBookingData,
+            // Atualizar horários se disponíveis
+            horarioPartida: liveFlightData.departureTime || baseBookingData.horarioPartida,
+            horarioChegada: liveFlightData.arrivalTime || baseBookingData.horarioChegada,
+            // Atualizar status com informação real
+            status: liveFlightData.status || baseBookingData.status,
+            // Adicionar informações extras se disponíveis
+            portaoEmbarque: liveFlightData.departureGate || liveFlightData.gate,
+            terminal: liveFlightData.departureTerminal || liveFlightData.terminal,
+            // Informações de atraso
+            ...(liveFlightData.delayed && { delayed: liveFlightData.delayed })
+          };
+        }
+      } catch (error) {
+        console.warn('⚠️ Não foi possível obter dados atualizados do voo:', error);
+      }
+
+      // Retornar dados base se não conseguir enriquecer
+      return baseBookingData;
     } catch (error) {
       console.error('❌ Erro ao buscar no banco de dados:', error);
       return null;
