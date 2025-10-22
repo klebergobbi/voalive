@@ -1,6 +1,8 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
+import { getAirLabsService } from './airlabs.service';
+import { getAviationstackService } from './aviationstack.service';
 
 export interface RealFlightData {
   localizador: string;
@@ -18,13 +20,38 @@ export interface RealFlightData {
 }
 
 export class RealFlightSearchService {
+  private airLabsService = getAirLabsService();
+  private aviationstackService = getAviationstackService();
 
   /**
-   * Busca voos reais usando FlightRadar24 API
+   * Busca voos reais usando APIs profissionais
+   * Prioridade: AirLabs > Aviationstack > FlightRadar24
    */
   async searchRealFlightByNumber(flightNumber: string): Promise<any> {
     try {
       console.log(`🔍 Buscando voo real: ${flightNumber}`);
+
+      // PRIMEIRA TENTATIVA: AirLabs (dados em tempo real)
+      if (this.airLabsService.isConfigured()) {
+        console.log('🔄 Tentando AirLabs...');
+        const airLabsFlight = await this.airLabsService.getFlightByNumber(flightNumber);
+        if (airLabsFlight) {
+          console.log('✅ Voo encontrado no AirLabs');
+          return this.airLabsService.convertToStandardFormat(airLabsFlight);
+        }
+      }
+
+      // SEGUNDA TENTATIVA: Aviationstack
+      if (this.aviationstackService.isConfigured()) {
+        console.log('🔄 Tentando Aviationstack...');
+        const aviationstackFlight = await this.aviationstackService.getFlightByNumber(flightNumber);
+        if (aviationstackFlight) {
+          console.log('✅ Voo encontrado no Aviationstack');
+          return this.aviationstackService.convertToStandardFormat(aviationstackFlight);
+        }
+      }
+
+      // TERCEIRA TENTATIVA: FlightRadar24 (fallback)
 
       // FlightRadar24 API endpoints
       const endpoints = [
@@ -527,6 +554,103 @@ export class RealFlightSearchService {
     if (upper.startsWith('AV')) return 'AVIANCA';
 
     return 'DESCONHECIDA';
+  }
+
+  /**
+   * Busca voos por aeroporto (partidas/chegadas)
+   */
+  async searchFlightsByAirport(airportCode: string, type: 'departures' | 'arrivals' = 'departures'): Promise<any[]> {
+    try {
+      console.log(`🔍 Buscando ${type} do aeroporto: ${airportCode}`);
+
+      // Tentar AirLabs primeiro
+      if (this.airLabsService.isConfigured()) {
+        console.log('🔄 Buscando no AirLabs...');
+        const flights = await this.airLabsService.getAirportSchedule(airportCode, type);
+        if (flights && flights.length > 0) {
+          console.log(`✅ ${flights.length} voos encontrados no AirLabs`);
+          return flights.map(f => this.airLabsService.convertToStandardFormat(f));
+        }
+      }
+
+      // Tentar Aviationstack
+      if (this.aviationstackService.isConfigured()) {
+        console.log('🔄 Buscando no Aviationstack...');
+        const flights = await this.aviationstackService.getAirportFlights(airportCode, type);
+        if (flights && flights.length > 0) {
+          console.log(`✅ ${flights.length} voos encontrados no Aviationstack`);
+          return flights.map(f => this.aviationstackService.convertToStandardFormat(f));
+        }
+      }
+
+      console.log('❌ Nenhum voo encontrado');
+      return [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar voos do aeroporto:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Busca voos por rota (origem → destino)
+   */
+  async searchFlightsByRoute(origin: string, destination: string, date?: string): Promise<any[]> {
+    try {
+      console.log(`🔍 Buscando voos: ${origin} → ${destination}`);
+
+      // Tentar AirLabs primeiro
+      if (this.airLabsService.isConfigured()) {
+        console.log('🔄 Buscando no AirLabs...');
+        const flights = await this.airLabsService.getFlightsByRoute(origin, destination);
+        if (flights && flights.length > 0) {
+          console.log(`✅ ${flights.length} voos encontrados no AirLabs`);
+          return flights.map(f => this.airLabsService.convertToStandardFormat(f));
+        }
+      }
+
+      // Tentar Aviationstack
+      if (this.aviationstackService.isConfigured()) {
+        console.log('🔄 Buscando no Aviationstack...');
+        const flights = await this.aviationstackService.getFlightsByRoute(origin, destination, date);
+        if (flights && flights.length > 0) {
+          console.log(`✅ ${flights.length} voos encontrados no Aviationstack`);
+          return flights.map(f => this.aviationstackService.convertToStandardFormat(f));
+        }
+      }
+
+      console.log('❌ Nenhum voo encontrado na rota');
+      return [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar voos por rota:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Busca voos em tempo real (voos ativos no ar)
+   */
+  async searchLiveFlights(params?: { airline?: string; country?: string }): Promise<any[]> {
+    try {
+      console.log('🔍 Buscando voos em tempo real...');
+
+      // AirLabs tem excelente suporte para live tracking
+      if (this.airLabsService.isConfigured()) {
+        console.log('🔄 Buscando no AirLabs...');
+        const flights = await this.airLabsService.getLiveFlights({
+          airline_iata: params?.airline,
+          flag: params?.country || 'BR'
+        });
+        if (flights && flights.length > 0) {
+          console.log(`✅ ${flights.length} voos em tempo real encontrados`);
+          return flights.map(f => this.airLabsService.convertToStandardFormat(f));
+        }
+      }
+
+      return [];
+    } catch (error) {
+      console.error('❌ Erro ao buscar voos em tempo real:', error);
+      return [];
+    }
   }
 }
 
