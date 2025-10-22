@@ -136,12 +136,19 @@ export class RealFlightSearchService {
 
   /**
    * Busca reserva real na GOL
+   * NOTA: GOL não possui API pública. Este método tenta endpoints não oficiais
+   * e fallback para scraping. Requer parceria comercial para API oficial (Sabre).
    */
   async searchGolBooking(localizador: string, sobrenome: string): Promise<RealFlightData | null> {
-    try {
-      console.log(`🔍 Buscando reserva real na GOL: ${localizador}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🔍 GOL - Iniciando busca de reserva`);
+    console.log(`   Localizador: ${localizador}`);
+    console.log(`   Sobrenome: ${sobrenome}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-      // API não oficial da GOL
+    try {
+      // TENTATIVA 1: API não oficial
+      console.log('📡 [1/3] Tentando endpoint não oficial da GOL...');
       const apiUrl = 'https://www.voegol.com.br/api/booking/search';
 
       const response = await axios.post(apiUrl, {
@@ -151,35 +158,75 @@ export class RealFlightSearchService {
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
           'Origin': 'https://www.voegol.com.br',
           'Referer': 'https://www.voegol.com.br/pt/servicos/minhas-viagens'
         },
-        timeout: 15000
+        timeout: 15000,
+        validateStatus: () => true // Aceitar qualquer status para análise
       });
 
-      if (response.data && response.data.booking) {
+      console.log(`   📊 Status HTTP: ${response.status}`);
+
+      if (response.status === 200 && response.data && response.data.booking) {
+        console.log('   ✅ Dados encontrados via API não oficial!');
         return this.parseGolApiResponse(response.data.booking, localizador, sobrenome);
       }
 
-      // Fallback: Scraping com Puppeteer
-      return await this.scrapeGolWithPuppeteer(localizador, sobrenome);
+      console.log(`   ⚠️ API não retornou dados válidos (Status: ${response.status})`);
 
-    } catch (error) {
-      console.error('❌ Erro ao buscar na GOL:', error);
+      // TENTATIVA 2: Scraping com Puppeteer (mais confiável)
+      console.log('🌐 [2/3] Tentando scraping com Puppeteer...');
+      const puppeteerResult = await this.scrapeGolWithPuppeteer(localizador, sobrenome);
+      if (puppeteerResult) {
+        console.log('   ✅ Dados encontrados via Puppeteer!');
+        return puppeteerResult;
+      }
 
-      // Tentar scraping direto
-      return await this.scrapeGolDirect(localizador, sobrenome);
+      console.log('   ⚠️ Puppeteer não encontrou dados');
+
+      // TENTATIVA 3: Scraping direto (último recurso)
+      console.log('📄 [3/3] Tentando scraping direto do HTML...');
+      const scrapingResult = await this.scrapeGolDirect(localizador, sobrenome);
+      if (scrapingResult) {
+        console.log('   ✅ Dados encontrados via scraping direto!');
+        return scrapingResult;
+      }
+
+      console.log('   ❌ Scraping direto não encontrou dados');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('❌ GOL - Reserva não encontrada após 3 tentativas');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      return null;
+
+    } catch (error: any) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ GOL - Erro crítico na busca:', error.message);
+      if (error.response) {
+        console.error(`   Status: ${error.response.status}`);
+        console.error(`   Dados: ${JSON.stringify(error.response.data).substring(0, 200)}`);
+      }
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      return null;
     }
   }
 
   /**
    * Busca reserva real na LATAM
+   * NOTA: LATAM não possui API pública. Este método tenta endpoints não oficiais
+   * e fallback para scraping. Requer parceria via GDS para API oficial.
    */
   async searchLatamBooking(localizador: string, sobrenome: string): Promise<RealFlightData | null> {
-    try {
-      console.log(`🔍 Buscando reserva real na LATAM: ${localizador}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🔍 LATAM - Iniciando busca de reserva`);
+    console.log(`   Localizador: ${localizador}`);
+    console.log(`   Sobrenome: ${sobrenome}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-      // Endpoint da LATAM
+    try {
+      // TENTATIVA 1: API não oficial
+      console.log('📡 [1/2] Tentando endpoint não oficial da LATAM...');
       const apiUrl = 'https://www.latam.com/ws-booking/booking/search';
 
       const response = await axios.post(apiUrl, {
@@ -190,35 +237,73 @@ export class RealFlightSearchService {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
           'X-LATAM-App': 'web',
           'X-LATAM-Language': 'pt',
           'X-LATAM-Country': 'br',
           'Origin': 'https://www.latam.com',
           'Referer': 'https://www.latam.com/pt_br/apps/personas/mybookings'
         },
-        timeout: 15000
+        timeout: 15000,
+        validateStatus: () => true
       });
 
-      if (response.data && response.data.data) {
+      console.log(`   📊 Status HTTP: ${response.status}`);
+
+      if (response.status === 200 && response.data && response.data.data) {
+        console.log('   ✅ Dados encontrados via API não oficial!');
         return this.parseLatamApiResponse(response.data.data, localizador, sobrenome);
       }
 
+      console.log(`   ⚠️ API não retornou dados válidos (Status: ${response.status})`);
+
+      // TENTATIVA 2: Scraping direto
+      console.log('📄 [2/2] Tentando scraping direto do HTML...');
+      const scrapingResult = await this.scrapeLatamDirect(localizador, sobrenome);
+      if (scrapingResult) {
+        console.log('   ✅ Dados encontrados via scraping!');
+        return scrapingResult;
+      }
+
+      console.log('   ❌ Scraping não encontrou dados');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('❌ LATAM - Reserva não encontrada após 2 tentativas');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return null;
 
-    } catch (error) {
-      console.error('❌ Erro ao buscar na LATAM:', error);
+    } catch (error: any) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ LATAM - Erro crítico na busca:', error.message);
+      if (error.response) {
+        console.error(`   Status: ${error.response.status}`);
+        console.error(`   Dados: ${JSON.stringify(error.response.data).substring(0, 200)}`);
+      }
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      // Última tentativa: scraping
+      console.log('📄 Tentando scraping como último recurso...');
       return await this.scrapeLatamDirect(localizador, sobrenome);
     }
   }
 
   /**
    * Busca reserva real na Azul
+   * NOTA: Azul NÃO possui API pública. Acesso apenas via contato comercial:
+   * suporte.azulws@voeazul.com.br
+   * Este método tenta endpoints não oficiais e fallback para scraping.
    */
   async searchAzulBooking(localizador: string, sobrenome: string): Promise<RealFlightData | null> {
-    try {
-      console.log(`🔍 Buscando reserva real na Azul: ${localizador}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🔍 AZUL - Iniciando busca de reserva`);
+    console.log(`   Localizador: ${localizador}`);
+    console.log(`   Sobrenome: ${sobrenome}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
+    try {
+      // TENTATIVA 1: API não oficial
+      console.log('📡 [1/2] Tentando endpoint não oficial da Azul...');
       const apiUrl = 'https://www.voeazul.com.br/api/reservations/search';
 
       const response = await axios.post(apiUrl, {
@@ -227,22 +312,51 @@ export class RealFlightSearchService {
       }, {
         headers: {
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'application/json',
+          'Accept-Language': 'pt-BR,pt;q=0.9',
           'X-Azul-Channel': 'WEB',
           'Origin': 'https://www.voeazul.com.br',
           'Referer': 'https://www.voeazul.com.br/br/pt/home/minhas-viagens'
         },
-        timeout: 15000
+        timeout: 15000,
+        validateStatus: () => true
       });
 
-      if (response.data && response.data.reservation) {
+      console.log(`   📊 Status HTTP: ${response.status}`);
+
+      if (response.status === 200 && response.data && response.data.reservation) {
+        console.log('   ✅ Dados encontrados via API não oficial!');
         return this.parseAzulApiResponse(response.data.reservation, localizador, sobrenome);
       }
 
+      console.log(`   ⚠️ API não retornou dados válidos (Status: ${response.status})`);
+
+      // TENTATIVA 2: Scraping direto
+      console.log('📄 [2/2] Tentando scraping direto do HTML...');
+      const scrapingResult = await this.scrapeAzulDirect(localizador, sobrenome);
+      if (scrapingResult) {
+        console.log('   ✅ Dados encontrados via scraping!');
+        return scrapingResult;
+      }
+
+      console.log('   ❌ Scraping não encontrou dados');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('❌ AZUL - Reserva não encontrada após 2 tentativas');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return null;
 
-    } catch (error) {
-      console.error('❌ Erro ao buscar na Azul:', error);
+    } catch (error: any) {
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('❌ AZUL - Erro crítico na busca:', error.message);
+      if (error.response) {
+        console.error(`   Status: ${error.response.status}`);
+        console.error(`   Dados: ${JSON.stringify(error.response.data).substring(0, 200)}`);
+      }
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      // Última tentativa: scraping
+      console.log('📄 Tentando scraping como último recurso...');
       return await this.scrapeAzulDirect(localizador, sobrenome);
     }
   }
