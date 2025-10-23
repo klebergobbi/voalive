@@ -53,38 +53,75 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
 
   const [isAutoFilled, setIsAutoFilled] = useState(false);
 
-  // Auto-preencher formulário quando dados da reserva chegarem
+  // Auto-preencher formulário quando dados da reserva OU busca de voo chegarem
   useEffect(() => {
     if (bookingData) {
-      console.log('🔄 Auto-preenchendo formulário com dados da reserva:', bookingData);
+      console.log('🔄 Auto-preenchendo formulário com dados:', bookingData);
 
-      // Converter dados da reserva para o formato do formulário
-      const departureDateTime = bookingData.dataPartida && bookingData.horarioPartida
-        ? `${bookingData.dataPartida}T${bookingData.horarioPartida.padStart(5, '0')}`
-        : '';
+      // DETECTAR SE É BUSCA DE VOO REAL ou RESERVA
+      const isRealFlightSearch = bookingData.posicao || bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado;
 
-      const arrivalDateTime = bookingData.dataChegada && bookingData.horarioChegada
-        ? `${bookingData.dataChegada}T${bookingData.horarioChegada.padStart(5, '0')}`
-        : '';
+      if (isRealFlightSearch) {
+        // ✈️ DADOS DE VOO REAL (da busca via APIs)
+        console.log('✅ Dados de VOO REAL detectados - Preenchimento completo automático');
 
-      setFormData({
-        flightNumber: bookingData.numeroVoo || '',
-        origin: bookingData.origem || '',
-        destination: bookingData.destino || '',
-        departureTime: departureDateTime,
-        arrivalTime: arrivalDateTime,
-        airline: bookingData.companhia || '',
-        aircraft: 'Boeing 737', // Valor padrão
-        status: convertStatus(bookingData.status),
-        checkInStatus: 'AVAILABLE',
-        locator: bookingData.localizador || '',
-        passengerFirstName: '', // Não temos nome
-        passengerLastName: bookingData.passageiro || bookingData.sobrenome || '',
-        gate: bookingData.portaoEmbarque || '',
-        terminal: bookingData.terminal || '',
-        seat: bookingData.assento || '',
-        ticketClass: bookingData.classe || 'ECONÔMICA',
-      });
+        const departureDateTime = bookingData.dataPartida && bookingData.horarioPartida
+          ? `${bookingData.dataPartida}T${bookingData.horarioPartida}`
+          : '';
+
+        const arrivalDateTime = bookingData.dataPartida && bookingData.horarioChegada
+          ? `${bookingData.dataPartida}T${bookingData.horarioChegada}`
+          : '';
+
+        setFormData({
+          flightNumber: bookingData.numeroVoo || '',
+          origin: bookingData.origem || '',
+          destination: bookingData.destino || '',
+          departureTime: departureDateTime,
+          arrivalTime: arrivalDateTime,
+          airline: bookingData.companhia || '',
+          aircraft: bookingData.aeronave || 'Não informado',
+          status: convertFlightApiStatus(bookingData.status),
+          checkInStatus: determineCheckInStatus(bookingData.status),
+          locator: '',
+          passengerFirstName: '',
+          passengerLastName: '',
+          gate: bookingData.portao || bookingData.portaoChegada || '',
+          terminal: bookingData.terminal || bookingData.terminalChegada || '',
+          seat: '',
+          ticketClass: '',
+        });
+      } else {
+        // 📋 DADOS DE RESERVA (busca por localizador)
+        console.log('✅ Dados de RESERVA detectados');
+
+        const departureDateTime = bookingData.dataPartida && bookingData.horarioPartida
+          ? `${bookingData.dataPartida}T${bookingData.horarioPartida.padStart(5, '0')}`
+          : '';
+
+        const arrivalDateTime = bookingData.dataChegada && bookingData.horarioChegada
+          ? `${bookingData.dataChegada}T${bookingData.horarioChegada.padStart(5, '0')}`
+          : '';
+
+        setFormData({
+          flightNumber: bookingData.numeroVoo || '',
+          origin: bookingData.origem || '',
+          destination: bookingData.destino || '',
+          departureTime: departureDateTime,
+          arrivalTime: arrivalDateTime,
+          airline: bookingData.companhia || '',
+          aircraft: 'Boeing 737',
+          status: convertStatus(bookingData.status),
+          checkInStatus: 'AVAILABLE',
+          locator: bookingData.localizador || '',
+          passengerFirstName: '',
+          passengerLastName: bookingData.passageiro || bookingData.sobrenome || '',
+          gate: bookingData.portaoEmbarque || '',
+          terminal: bookingData.terminal || '',
+          seat: bookingData.assento || '',
+          ticketClass: bookingData.classe || 'ECONÔMICA',
+        });
+      }
 
       setIsAutoFilled(true);
     } else if (flight) {
@@ -122,6 +159,74 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
     };
 
     return statusMap[status] || 'SCHEDULED';
+  };
+
+  // Converte status da API de voos reais para o formato do sistema
+  const convertFlightApiStatus = (status: string): string => {
+    if (!status) return 'SCHEDULED';
+
+    const statusUpper = status.toUpperCase();
+
+    // Mapeamento de status das APIs reais
+    const statusMap: { [key: string]: string } = {
+      // Status em português
+      'EM VOO': 'DEPARTED',
+      'EM VÔO': 'DEPARTED',
+      'PROGRAMADO': 'SCHEDULED',
+      'AGENDADO': 'SCHEDULED',
+      'NO HORÁRIO': 'SCHEDULED',
+      'ATRASADO': 'DELAYED',
+      'CANCELADO': 'CANCELLED',
+      'POUSOU': 'ARRIVED',
+      'CHEGOU': 'ARRIVED',
+      'EMBARCANDO': 'BOARDING',
+      'DECOLOU': 'DEPARTED',
+      'PARTIU': 'DEPARTED',
+
+      // Status em inglês (das APIs)
+      'SCHEDULED': 'SCHEDULED',
+      'ACTIVE': 'DEPARTED',
+      'EN-ROUTE': 'DEPARTED',
+      'IN FLIGHT': 'DEPARTED',
+      'LANDED': 'ARRIVED',
+      'ARRIVED': 'ARRIVED',
+      'DELAYED': 'DELAYED',
+      'CANCELLED': 'CANCELLED',
+      'BOARDING': 'BOARDING',
+      'DEPARTED': 'DEPARTED',
+    };
+
+    // Procurar correspondência parcial
+    for (const [key, value] of Object.entries(statusMap)) {
+      if (statusUpper.includes(key)) {
+        return value;
+      }
+    }
+
+    return 'SCHEDULED';
+  };
+
+  // Determina o status de check-in baseado no status do voo
+  const determineCheckInStatus = (flightStatus: string): string => {
+    if (!flightStatus) return 'NOT_AVAILABLE';
+
+    const statusUpper = flightStatus.toUpperCase();
+
+    if (statusUpper.includes('EMBARCANDO') || statusUpper.includes('BOARDING')) {
+      return 'COMPLETED';
+    }
+
+    if (statusUpper.includes('EM VOO') || statusUpper.includes('DEPARTED') ||
+        statusUpper.includes('CHEGOU') || statusUpper.includes('ARRIVED')) {
+      return 'COMPLETED';
+    }
+
+    if (statusUpper.includes('PROGRAMADO') || statusUpper.includes('SCHEDULED') ||
+        statusUpper.includes('NO HORÁRIO')) {
+      return 'AVAILABLE';
+    }
+
+    return 'NOT_AVAILABLE';
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -175,10 +280,142 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
             <div className="bg-green-50 border border-green-200 rounded-md p-3">
               <p className="text-sm text-green-700 flex items-center gap-2">
                 <span>✅</span>
-                Dados preenchidos automaticamente a partir da reserva <strong>{formData.locator}</strong>
+                {formData.locator ? (
+                  <>
+                    Dados preenchidos automaticamente a partir da reserva <strong>{formData.locator}</strong>
+                  </>
+                ) : (
+                  <>
+                    Dados preenchidos automaticamente a partir da <strong>busca de voo real via APIs</strong>
+                  </>
+                )}
                 <br />
                 <span className="text-xs">Revise as informações e ajuste se necessário antes de salvar.</span>
               </p>
+            </div>
+          )}
+
+          {/* Informações adicionais do voo real (se disponíveis) */}
+          {bookingData && (bookingData.posicao || bookingData.atrasado || bookingData.horarioPartidaReal) && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-3">
+              <div className="font-medium text-blue-900 flex items-center gap-2">
+                <span>📊</span>
+                Informações em Tempo Real
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {/* Horários Reais */}
+                {(bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado) && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">⏰ Partida Real/Estimada</div>
+                    <div className="text-blue-900 font-semibold">
+                      {bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado}
+                    </div>
+                  </div>
+                )}
+
+                {(bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado) && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">⏰ Chegada Real/Estimada</div>
+                    <div className="text-blue-900 font-semibold">
+                      {bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado}
+                    </div>
+                  </div>
+                )}
+
+                {/* Portões e Terminais */}
+                {bookingData.portao && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">🚪 Portão Partida</div>
+                    <div className="text-blue-900 font-semibold">{bookingData.portao}</div>
+                  </div>
+                )}
+
+                {bookingData.terminal && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">🏢 Terminal Partida</div>
+                    <div className="text-blue-900 font-semibold">{bookingData.terminal}</div>
+                  </div>
+                )}
+
+                {bookingData.portaoChegada && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">🚪 Portão Chegada</div>
+                    <div className="text-blue-900 font-semibold">{bookingData.portaoChegada}</div>
+                  </div>
+                )}
+
+                {bookingData.terminalChegada && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">🏢 Terminal Chegada</div>
+                    <div className="text-blue-900 font-semibold">{bookingData.terminalChegada}</div>
+                  </div>
+                )}
+
+                {/* Atraso */}
+                {bookingData.atrasado !== undefined && bookingData.atrasado > 0 && (
+                  <div className="bg-yellow-50 p-2 rounded border border-yellow-200 col-span-2">
+                    <div className="text-xs text-yellow-700 font-medium mb-1">⚠️ Atraso</div>
+                    <div className="text-yellow-900 font-bold text-lg">{bookingData.atrasado} minutos</div>
+                  </div>
+                )}
+
+                {/* Posição GPS */}
+                {bookingData.posicao && (
+                  <div className="bg-white p-2 rounded border border-blue-100 col-span-2">
+                    <div className="text-xs text-blue-600 font-medium mb-2">📍 Posição GPS em Tempo Real</div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-blue-600">Lat:</span>{' '}
+                        <span className="font-mono text-blue-900">{bookingData.posicao.latitude?.toFixed(4)}°</span>
+                      </div>
+                      <div>
+                        <span className="text-blue-600">Lng:</span>{' '}
+                        <span className="font-mono text-blue-900">{bookingData.posicao.longitude?.toFixed(4)}°</span>
+                      </div>
+                      {bookingData.posicao.altitude && (
+                        <div>
+                          <span className="text-blue-600">Alt:</span>{' '}
+                          <span className="font-mono text-blue-900">{bookingData.posicao.altitude.toLocaleString()} ft</span>
+                        </div>
+                      )}
+                      {bookingData.posicao.velocidade && (
+                        <div>
+                          <span className="text-blue-600">Vel:</span>{' '}
+                          <span className="font-mono text-blue-900">{bookingData.posicao.velocidade} km/h</span>
+                        </div>
+                      )}
+                      {bookingData.posicao.direcao && (
+                        <div>
+                          <span className="text-blue-600">Dir:</span>{' '}
+                          <span className="font-mono text-blue-900">{bookingData.posicao.direcao}°</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Aeronave */}
+                {bookingData.aeronave && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">✈️ Aeronave</div>
+                    <div className="text-blue-900 font-semibold">{bookingData.aeronave}</div>
+                  </div>
+                )}
+
+                {bookingData.registro && (
+                  <div className="bg-white p-2 rounded border border-blue-100">
+                    <div className="text-xs text-blue-600 font-medium mb-1">🔖 Registro</div>
+                    <div className="text-blue-900 font-mono text-xs">{bookingData.registro}</div>
+                  </div>
+                )}
+              </div>
+
+              {bookingData.ultimaAtualizacao && (
+                <div className="text-xs text-blue-500 text-center pt-2 border-t border-blue-200">
+                  Última atualização: {new Date(bookingData.ultimaAtualizacao).toLocaleString('pt-BR')}
+                </div>
+              )}
             </div>
           )}
         </DialogHeader>
