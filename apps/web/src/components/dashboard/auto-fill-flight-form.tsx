@@ -53,10 +53,29 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
 
   const [isAutoFilled, setIsAutoFilled] = useState(false);
 
+  // Detectar se é busca de voo real (para exibir campos adicionais)
+  const isRealFlightSearch = bookingData && (
+    bookingData.posicao ||
+    bookingData.horarioPartidaReal ||
+    bookingData.horarioPartidaEstimado ||
+    bookingData.portao ||
+    bookingData.terminal
+  );
+
   // Auto-preencher formulário quando dados da reserva OU busca de voo chegarem
   useEffect(() => {
     if (bookingData) {
-      console.log('🔄 Auto-preenchendo formulário com dados:', bookingData);
+      console.log('🔄 Auto-preenchendo formulário com dados COMPLETOS:', JSON.stringify(bookingData, null, 2));
+      console.log('📋 Campos recebidos:', {
+        numeroVoo: bookingData.numeroVoo,
+        origem: bookingData.origem,
+        destino: bookingData.destino,
+        dataPartida: bookingData.dataPartida,
+        horarioPartida: bookingData.horarioPartida,
+        horarioChegada: bookingData.horarioChegada,
+        companhia: bookingData.companhia,
+        status: bookingData.status
+      });
 
       // DETECTAR SE É BUSCA DE VOO REAL ou RESERVA
       const isRealFlightSearch = bookingData.posicao || bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado;
@@ -596,6 +615,199 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
               </Select>
             </div>
           </div>
+
+          {/* ======== NOVOS CAMPOS: INFORMAÇÕES DO VOO REAL ======== */}
+          {bookingData && isRealFlightSearch && (
+            <div className="border-t pt-6 space-y-4">
+              <h3 className="font-semibold text-lg text-gray-900 flex items-center gap-2">
+                <span>📊</span>
+                Informações do Voo (Somente Leitura)
+              </h3>
+
+              {/* Horários Atualizados */}
+              {(bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado || bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
+                    <span>⏰</span>
+                    Horários Atualizados
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado) && (
+                      <div>
+                        <Label className="text-xs text-blue-600">Partida Atualizada</Label>
+                        <Input
+                          value={bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado}
+                          readOnly
+                          className="bg-white font-semibold text-blue-900"
+                        />
+                      </div>
+                    )}
+                    {(bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado) && (
+                      <div>
+                        <Label className="text-xs text-blue-600">Chegada Atualizada</Label>
+                        <Input
+                          value={bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado}
+                          readOnly
+                          className="bg-white font-semibold text-blue-900"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Portões e Terminais */}
+              {(bookingData.portao || bookingData.terminal || bookingData.portaoChegada || bookingData.terminalChegada) && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-medium text-green-900 mb-3 flex items-center gap-2">
+                    <span>🚪</span>
+                    Portões e Terminais
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {bookingData.portao && (
+                      <div>
+                        <Label className="text-xs text-green-600">Portão Partida</Label>
+                        <Input
+                          value={bookingData.portao}
+                          readOnly
+                          className="bg-white font-bold text-green-900 text-lg"
+                        />
+                      </div>
+                    )}
+                    {bookingData.terminal && (
+                      <div>
+                        <Label className="text-xs text-green-600">Terminal Partida</Label>
+                        <Input
+                          value={bookingData.terminal}
+                          readOnly
+                          className="bg-white font-bold text-green-900 text-lg"
+                        />
+                      </div>
+                    )}
+                    {bookingData.portaoChegada && (
+                      <div>
+                        <Label className="text-xs text-green-600">Portão Chegada</Label>
+                        <Input
+                          value={bookingData.portaoChegada}
+                          readOnly
+                          className="bg-white font-bold text-green-900 text-lg"
+                        />
+                      </div>
+                    )}
+                    {bookingData.terminalChegada && (
+                      <div>
+                        <Label className="text-xs text-green-600">Terminal Chegada</Label>
+                        <Input
+                          value={bookingData.terminalChegada}
+                          readOnly
+                          className="bg-white font-bold text-green-900 text-lg"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Posição GPS */}
+              {bookingData.posicao && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <h4 className="font-medium text-purple-900 mb-3 flex items-center gap-2">
+                    <span>📍</span>
+                    Localização em Tempo Real
+                  </h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label className="text-xs text-purple-600">Latitude</Label>
+                      <Input
+                        value={`${bookingData.posicao.latitude?.toFixed(4)}°`}
+                        readOnly
+                        className="bg-white font-mono text-purple-900"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-purple-600">Longitude</Label>
+                      <Input
+                        value={`${bookingData.posicao.longitude?.toFixed(4)}°`}
+                        readOnly
+                        className="bg-white font-mono text-purple-900"
+                      />
+                    </div>
+                    {bookingData.posicao.altitude && (
+                      <div>
+                        <Label className="text-xs text-purple-600">Altitude</Label>
+                        <Input
+                          value={`${bookingData.posicao.altitude.toLocaleString()} pés`}
+                          readOnly
+                          className="bg-white font-mono text-purple-900"
+                        />
+                      </div>
+                    )}
+                    {bookingData.posicao.velocidade && (
+                      <div>
+                        <Label className="text-xs text-purple-600">Velocidade</Label>
+                        <Input
+                          value={`${bookingData.posicao.velocidade} km/h`}
+                          readOnly
+                          className="bg-white font-mono text-purple-900"
+                        />
+                      </div>
+                    )}
+                    {bookingData.posicao.direcao && (
+                      <div>
+                        <Label className="text-xs text-purple-600">Direção</Label>
+                        <Input
+                          value={`${bookingData.posicao.direcao}°`}
+                          readOnly
+                          className="bg-white font-mono text-purple-900"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Atraso */}
+              {bookingData.atrasado !== undefined && bookingData.atrasado > 0 && (
+                <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                  <h4 className="font-medium text-yellow-900 mb-3 flex items-center gap-2">
+                    <span>⚠️</span>
+                    Atraso Detectado
+                  </h4>
+                  <div>
+                    <Label className="text-xs text-yellow-700">Tempo de Atraso</Label>
+                    <Input
+                      value={`${bookingData.atrasado} minutos`}
+                      readOnly
+                      className="bg-white font-bold text-yellow-900 text-xl"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Status Atual do Voo */}
+              {bookingData.status && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                    <span>✈️</span>
+                    Status Atual
+                  </h4>
+                  <div>
+                    <Label className="text-xs text-gray-600">Status em Tempo Real</Label>
+                    <Input
+                      value={bookingData.status}
+                      readOnly
+                      className={`bg-white font-bold text-xl ${
+                        bookingData.status?.includes('EM VOO') || bookingData.status?.includes('ACTIVE') ? 'text-blue-900' :
+                        bookingData.status?.includes('ATRASADO') || bookingData.status?.includes('DELAYED') ? 'text-yellow-900' :
+                        bookingData.status?.includes('CANCELADO') || bookingData.status?.includes('CANCELLED') ? 'text-red-900' :
+                        'text-green-900'
+                      }`}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
