@@ -47,6 +47,8 @@ services:
       DATABASE_URL: postgresql://reservasegura_user:reservasegura_pass_prod_2024@postgres:5432/reservasegura
       REDIS_URL: redis://:reservasegura_redis_2024@redis:6379
       FIRECRAWL_API_KEY: fc-2dda7f7f0e2c4ccb816cb21e7f372410
+      AVIATIONSTACK_API_KEY: 50e337585fbf093ffbee426c270e82e3
+      AIRLABS_API_KEY: ""
       AUTO_START_SCRAPER: "true"
       JWT_SECRET: reservasegura_jwt_secret_prod_2024_ultra_secure
       LOG_LEVEL: info
