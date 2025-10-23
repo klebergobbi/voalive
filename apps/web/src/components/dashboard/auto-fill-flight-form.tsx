@@ -62,16 +62,31 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
       const isRealFlightSearch = bookingData.posicao || bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado;
 
       if (isRealFlightSearch) {
-        // ✈️ DADOS DE VOO REAL (da busca via APIs)
+        // ✈️ DADOS DE VOO REAL (da busca online)
         console.log('✅ Dados de VOO REAL detectados - Preenchimento completo automático');
 
-        const departureDateTime = bookingData.dataPartida && bookingData.horarioPartida
-          ? `${bookingData.dataPartida}T${bookingData.horarioPartida}`
-          : '';
+        // Função helper para formatar horário no padrão datetime-local
+        const formatDateTime = (date: string, time: string): string => {
+          if (!date || !time) return '';
 
-        const arrivalDateTime = bookingData.dataPartida && bookingData.horarioChegada
-          ? `${bookingData.dataPartida}T${bookingData.horarioChegada}`
-          : '';
+          // Garantir que a data está no formato YYYY-MM-DD
+          const dateFormatted = date.includes('T') ? date.split('T')[0] : date;
+
+          // Garantir que o horário está no formato HH:MM (remover segundos se houver)
+          const timeParts = time.split(':');
+          const timeFormatted = `${timeParts[0].padStart(2, '0')}:${timeParts[1].padStart(2, '0')}`;
+
+          return `${dateFormatted}T${timeFormatted}`;
+        };
+
+        // Usar horários reais se disponíveis, senão usar horários programados
+        const departureTime = bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado || bookingData.horarioPartida;
+        const arrivalTime = bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado || bookingData.horarioChegada;
+
+        const departureDateTime = formatDateTime(bookingData.dataPartida, departureTime);
+        const arrivalDateTime = formatDateTime(bookingData.dataPartida, arrivalTime);
+
+        console.log('📅 Datas formatadas:', { departureDateTime, arrivalDateTime });
 
         setFormData({
           flightNumber: bookingData.numeroVoo || '',
@@ -286,7 +301,7 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
                   </>
                 ) : (
                   <>
-                    Dados preenchidos automaticamente a partir da <strong>busca de voo real via APIs</strong>
+                    Dados preenchidos automaticamente a partir da <strong>busca de voo</strong>
                   </>
                 )}
                 <br />
@@ -295,19 +310,19 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
             </div>
           )}
 
-          {/* Informações adicionais do voo real (se disponíveis) */}
+          {/* Informações adicionais do voo (se disponíveis) */}
           {bookingData && (bookingData.posicao || bookingData.atrasado || bookingData.horarioPartidaReal) && (
             <div className="bg-blue-50 border border-blue-200 rounded-md p-4 space-y-3">
               <div className="font-medium text-blue-900 flex items-center gap-2">
                 <span>📊</span>
-                Informações em Tempo Real
+                Informações Adicionais do Voo
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
-                {/* Horários Reais */}
+                {/* Horários Atualizados */}
                 {(bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado) && (
                   <div className="bg-white p-2 rounded border border-blue-100">
-                    <div className="text-xs text-blue-600 font-medium mb-1">⏰ Partida Real/Estimada</div>
+                    <div className="text-xs text-blue-600 font-medium mb-1">⏰ Horário Partida Atualizado</div>
                     <div className="text-blue-900 font-semibold">
                       {bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado}
                     </div>
@@ -316,7 +331,7 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
 
                 {(bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado) && (
                   <div className="bg-white p-2 rounded border border-blue-100">
-                    <div className="text-xs text-blue-600 font-medium mb-1">⏰ Chegada Real/Estimada</div>
+                    <div className="text-xs text-blue-600 font-medium mb-1">⏰ Horário Chegada Atualizado</div>
                     <div className="text-blue-900 font-semibold">
                       {bookingData.horarioChegadaReal || bookingData.horarioChegadaEstimado}
                     </div>
@@ -360,34 +375,34 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
                   </div>
                 )}
 
-                {/* Posição GPS */}
+                {/* Localização do Voo */}
                 {bookingData.posicao && (
                   <div className="bg-white p-2 rounded border border-blue-100 col-span-2">
-                    <div className="text-xs text-blue-600 font-medium mb-2">📍 Posição GPS em Tempo Real</div>
+                    <div className="text-xs text-blue-600 font-medium mb-2">📍 Localização Atual</div>
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div>
-                        <span className="text-blue-600">Lat:</span>{' '}
+                        <span className="text-blue-600">Latitude:</span>{' '}
                         <span className="font-mono text-blue-900">{bookingData.posicao.latitude?.toFixed(4)}°</span>
                       </div>
                       <div>
-                        <span className="text-blue-600">Lng:</span>{' '}
+                        <span className="text-blue-600">Longitude:</span>{' '}
                         <span className="font-mono text-blue-900">{bookingData.posicao.longitude?.toFixed(4)}°</span>
                       </div>
                       {bookingData.posicao.altitude && (
                         <div>
-                          <span className="text-blue-600">Alt:</span>{' '}
-                          <span className="font-mono text-blue-900">{bookingData.posicao.altitude.toLocaleString()} ft</span>
+                          <span className="text-blue-600">Altitude:</span>{' '}
+                          <span className="font-mono text-blue-900">{bookingData.posicao.altitude.toLocaleString()} pés</span>
                         </div>
                       )}
                       {bookingData.posicao.velocidade && (
                         <div>
-                          <span className="text-blue-600">Vel:</span>{' '}
+                          <span className="text-blue-600">Velocidade:</span>{' '}
                           <span className="font-mono text-blue-900">{bookingData.posicao.velocidade} km/h</span>
                         </div>
                       )}
                       {bookingData.posicao.direcao && (
                         <div>
-                          <span className="text-blue-600">Dir:</span>{' '}
+                          <span className="text-blue-600">Direção:</span>{' '}
                           <span className="font-mono text-blue-900">{bookingData.posicao.direcao}°</span>
                         </div>
                       )}
