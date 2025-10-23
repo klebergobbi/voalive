@@ -32,7 +32,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 
 # IMPORTANT: Set API URL at build time for Next.js to bundle it
-ARG NEXT_PUBLIC_API_URL=https://www.reservasegura.pro/api
+ARG NEXT_PUBLIC_API_URL=https://www.reservasegura.pro
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
 RUN npx turbo build --filter=@reservasegura/web

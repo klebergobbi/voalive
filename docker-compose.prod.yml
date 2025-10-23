@@ -75,7 +75,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3003
-      NEXT_PUBLIC_API_URL: https://www.reservasegura.pro/api
+      NEXT_PUBLIC_API_URL: https://www.reservasegura.pro
       NEXTAUTH_URL: https://www.reservasegura.pro
       NEXTAUTH_SECRET: reservasegura_nextauth_secret_prod_2024
       DATABASE_URL: postgresql://reservasegura_user:reservasegura_pass_prod_2024@postgres:5432/reservasegura
