@@ -8,6 +8,7 @@ import { FloatingActionButton } from '../../components/dashboard/floating-action
 import { FlightFormModal } from '../../components/dashboard/flight-form-modal';
 import { FlightMonitor } from '../../components/dashboard/flight-monitor';
 import { BookingSearchModal } from '../../components/dashboard/booking-search-modal';
+import { FlightSearchModal } from '../../components/dashboard/flight-search-modal';
 import { AutoFillFlightForm } from '../../components/dashboard/auto-fill-flight-form';
 import { Flight, FlightCategoryType } from '@reservasegura/types';
 import { mockFlights } from '../../lib/mock-data';
@@ -21,6 +22,7 @@ export default function DashboardPage() {
   const [editingFlight, setEditingFlight] = useState<Flight | null>(null);
   const [showMonitor, setShowMonitor] = useState(false);
   const [showBookingSearch, setShowBookingSearch] = useState(false);
+  const [showFlightSearch, setShowFlightSearch] = useState(false);
   const [showAutoFillForm, setShowAutoFillForm] = useState(false);
   const [bookingData, setBookingData] = useState<any>(null);
 
@@ -103,6 +105,18 @@ export default function DashboardPage() {
     setShowBookingSearch(true);
   };
 
+  const handleSearchFlight = () => {
+    setEditingFlight(null);
+    setBookingData(null);
+    setShowFlightSearch(true);
+  };
+
+  const handleFlightSearchFound = (flightData: any) => {
+    console.log('✈️ Vôo encontrado, abrindo formulário:', flightData);
+    setBookingData(flightData);
+    setShowAutoFillForm(true);
+  };
+
   const handleEditFlight = (flight: Flight) => {
     setEditingFlight(flight);
     setBookingData(null);
@@ -164,11 +178,11 @@ export default function DashboardPage() {
             <h1 className="text-2xl font-bold">Gestão de Voos</h1>
             <div className="flex gap-2">
               <button
-                onClick={handleAddFlightFromBooking}
+                onClick={handleSearchFlight}
                 className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors flex items-center gap-2"
               >
                 <span>✈️</span>
-                Buscar Reserva
+                Buscar Vôo
               </button>
               <button
                 onClick={() => setShowMonitor(!showMonitor)}
@@ -222,6 +236,12 @@ export default function DashboardPage() {
         open={showBookingSearch}
         onOpenChange={setShowBookingSearch}
         onBookingFound={handleBookingFound}
+      />
+
+      <FlightSearchModal
+        open={showFlightSearch}
+        onOpenChange={setShowFlightSearch}
+        onFlightFound={handleFlightSearchFound}
       />
 
       <AutoFillFlightForm

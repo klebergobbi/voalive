@@ -6,49 +6,34 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
-# Copy workspace configuration
-COPY package.json package-lock.json* ./
-COPY turbo.json tsconfig.json ./
-
-# Copy all package.json files to establish workspace structure
+# Copy ALL files needed for npm install (workspace structure)
+COPY package.json package-lock.json* turbo.json tsconfig.json ./
 COPY apps/web/package.json ./apps/web/
-COPY apps/web/tsconfig.json ./apps/web/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/types/package.json ./packages/types/
-COPY packages/database/package.json ./packages/database/
+COPY packages/ ./packages/
 
-# Install all dependencies (including devDependencies for build)
-RUN npm ci
+# Install all dependencies
+RUN npm install
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
 
-# Copy node_modules from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+# Copy everything from deps (includes all node_modules)
+COPY --from=deps /app ./
 
-# Copy workspace files
-COPY package.json package-lock.json* turbo.json tsconfig.json ./
-
-# Copy all source code for packages (needed for build)
-COPY packages ./packages
-
-# Copy web app source
+# Copy source code (will overwrite package.json files, which is fine)
 COPY apps/web ./apps/web
 
-# Generate Prisma client (if needed)
+# Generate Prisma client
 RUN cd packages/database && npx prisma generate || true
 
-# Build packages first (ui, types, etc)
-RUN npm run build --workspace=packages/ui --if-present || true
-RUN npm run build --workspace=packages/types --if-present || true
-
 # Build the web app
-WORKDIR /app/apps/web
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+ENV NODE_ENV=production
 
-# Production image, copy all the files and run Next.js
+RUN npx turbo build --filter=@reservasegura/web
+
+# Production image
 FROM base AS runner
 WORKDIR /app
 
@@ -59,10 +44,12 @@ ENV PORT=3003
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-# Copy necessary files for standalone mode
-COPY --from=builder /app/apps/web/public ./public
+# Copy public folder
+COPY --from=builder /app/apps/web/public ./apps/web/public
+
+# Copy standalone output
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 
 USER nextjs
 
@@ -70,8 +57,7 @@ EXPOSE 3003
 
 ENV HOSTNAME="0.0.0.0"
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3003/ || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

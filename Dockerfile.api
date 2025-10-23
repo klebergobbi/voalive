@@ -1,65 +1,53 @@
-# Dockerfile for ReservaSegura API (Production) - Monorepo Support
-FROM node:20-alpine AS base
+# Dockerfile for ReservaSegura API (Production) - Debian para compatibilidade
+FROM node:20-slim AS base
 
-# Install dependencies only when needed
+# Install dependencies
 FROM base AS deps
-RUN apk add --no-cache libc6-compat python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ ca-certificates openssl libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-# Copy workspace configuration
-COPY package.json package-lock.json* ./
-COPY turbo.json ./
-
-# Copy all package.json files
-COPY apps/api/package.json ./apps/api/
-COPY packages/database/package.json ./packages/database/
-COPY packages/types/package.json ./packages/types/
-
-# Install all dependencies
-RUN npm ci
-
-# Rebuild the source code only when needed
-FROM base AS builder
-WORKDIR /app
-
-# Copy node_modules from deps stage  
-COPY --from=deps /app/node_modules ./node_modules
 
 # Copy workspace files
 COPY package.json package-lock.json* turbo.json ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/ ./packages/
 
-# Copy all source code for packages
-COPY packages ./packages
+# Install dependencies
+RUN npm install
 
-# Copy API source
+# Build stage
+FROM base AS builder
+WORKDIR /app
+
+COPY --from=deps /app ./
 COPY apps/api ./apps/api
 
-# Generate Prisma client
+# Install OpenSSL para Prisma
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Generate Prisma client com binary target correto
 RUN cd packages/database && npx prisma generate
 
-# Build packages first
-RUN npm run build --workspace=packages/types --if-present || true
-RUN npm run build --workspace=packages/database --if-present || true
-
-# Build the API
-WORKDIR /app/apps/api
-RUN npm run build
-
-# Production image, copy all the files and run the app
+# Production stage
 FROM base AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=4000
 
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 apiuser
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget ca-certificates openssl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy necessary files
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./package.json
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/node_modules ./node_modules
+RUN groupadd --system --gid 1001 nodejs
+RUN useradd --system --uid 1001 --gid nodejs apiuser
+
+# Copy everything from builder
+COPY --from=builder /app ./
 
 USER apiuser
 
@@ -67,8 +55,8 @@ EXPOSE 4000
 
 ENV HOSTNAME="0.0.0.0"
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1
 
-CMD ["node", "dist/index.js"]
+# Use tsx to run TypeScript
+CMD ["npx", "tsx", "apps/api/src/index.ts"]

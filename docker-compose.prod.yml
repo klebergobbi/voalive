@@ -59,7 +59,7 @@ services:
       - reservasegura-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.api.rule=Host(`api.reservasegura.com`)"
+      - "traefik.http.routers.api.rule=Host(`api.reservasegura.pro`)"
       - "traefik.http.routers.api.tls=true"
       - "traefik.http.routers.api.tls.certresolver=letsencrypt"
       - "traefik.http.services.api.loadbalancer.server.port=4000"
@@ -73,8 +73,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3003
-      NEXT_PUBLIC_API_URL: https://api.reservasegura.com
-      NEXTAUTH_URL: https://reservasegura.com
+      NEXT_PUBLIC_API_URL: https://api.reservasegura.pro
+      NEXTAUTH_URL: https://reservasegura.pro
       NEXTAUTH_SECRET: reservasegura_nextauth_secret_prod_2024
       DATABASE_URL: postgresql://reservasegura_user:reservasegura_pass_prod_2024@postgres:5432/reservasegura
     depends_on:
@@ -83,9 +83,8 @@ services:
       - reservasegura-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=Host(`reservasegura.com`) || Host(`www.reservasegura.com`)"
-      - "traefik.http.routers.web.tls=true"
-      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.web.rule=Host(`reservasegura.pro`) || Host(`www.reservasegura.pro`)"
+      - "traefik.http.routers.web.entrypoints=web"
       - "traefik.http.services.web.loadbalancer.server.port=3003"
 
   # Traefik Reverse Proxy
@@ -101,7 +100,7 @@ services:
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=admin@reservasegura.com"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@reservasegura.pro"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
       - "--global.checknewversion=false"
       - "--global.sendanonymoususage=false"
@@ -116,7 +115,7 @@ services:
       - reservasegura-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.traefik.rule=Host(`traefik.reservasegura.com`)"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.reservasegura.pro`)"
       - "traefik.http.routers.traefik.tls=true"
       - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
       - "traefik.http.routers.traefik.service=api@internal"
@@ -139,7 +138,7 @@ services:
       - reservasegura-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.prometheus.rule=Host(`metrics.reservasegura.com`)"
+      - "traefik.http.routers.prometheus.rule=Host(`metrics.reservasegura.pro`)"
       - "traefik.http.routers.prometheus.tls=true"
       - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
@@ -151,13 +150,13 @@ services:
     environment:
       GF_SECURITY_ADMIN_PASSWORD: reservasegura_grafana_admin_2024
       GF_USERS_ALLOW_SIGN_UP: false
-      GF_SERVER_DOMAIN: monitor.reservasegura.com
-      GF_SERVER_ROOT_URL: https://monitor.reservasegura.com
+      GF_SERVER_DOMAIN: monitor.reservasegura.pro
+      GF_SERVER_ROOT_URL: https://monitor.reservasegura.pro
       GF_SMTP_ENABLED: true
       GF_SMTP_HOST: smtp.gmail.com:587
-      GF_SMTP_USER: alerts@reservasegura.com
+      GF_SMTP_USER: alerts@reservasegura.pro
       GF_SMTP_PASSWORD: your_smtp_password
-      GF_SMTP_FROM_ADDRESS: alerts@reservasegura.com
+      GF_SMTP_FROM_ADDRESS: alerts@reservasegura.pro
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
@@ -168,7 +167,7 @@ services:
       - prometheus
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.grafana.rule=Host(`monitor.reservasegura.com`)"
+      - "traefik.http.routers.grafana.rule=Host(`monitor.reservasegura.pro`)"
       - "traefik.http.routers.grafana.tls=true"
       - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
@@ -238,7 +237,7 @@ services:
       - reservasegura-network
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.uptime.rule=Host(`status.reservasegura.com`)"
+      - "traefik.http.routers.uptime.rule=Host(`status.reservasegura.pro`)"
       - "traefik.http.routers.uptime.tls=true"
       - "traefik.http.routers.uptime.tls.certresolver=letsencrypt"
       - "traefik.http.services.uptime.loadbalancer.server.port=3001"

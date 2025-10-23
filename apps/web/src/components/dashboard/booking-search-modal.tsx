@@ -114,10 +114,10 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-2xl">✈️</span>
-            Buscar Reserva
+            Buscar Vôo
           </DialogTitle>
           <p className="text-sm text-gray-600 mt-2">
-            Digite o localizador, sobrenome e opcionalmente a origem para buscar sua reserva nas companhias aéreas.
+            Digite o localizador, sobrenome e opcionalmente a origem para buscar seu vôo nas companhias aéreas.
           </p>
         </DialogHeader>
 

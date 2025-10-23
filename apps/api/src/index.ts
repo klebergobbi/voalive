@@ -1,15 +1,18 @@
+// Load environment variables FIRST, before any other imports
+import dotenv from 'dotenv';
+dotenv.config();
+
+// Now load the rest
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import 'express-async-errors';
 import { flightScraperRoutes } from './routes/flight-scraper.routes';
 import airlineBookingRoutes from './routes/airline-booking.routes';
+import flightSearchRoutes from './routes/flight-search.routes';
 import { getFlightScraperService } from './services/flight-scraper.service';
 import { metricsMiddleware, prometheusMetricsHandler, jsonMetricsHandler } from './middlewares/metrics.middleware';
 import { getHealthMonitorService } from './services/health-monitor.service';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -66,6 +69,7 @@ app.get('/api/metrics', jsonMetricsHandler);
 // API Routes
 app.use('/api/v1/flight-scraper', flightScraperRoutes);
 app.use('/api/v1/airline-booking', airlineBookingRoutes);
+app.use('/api/v1/flight-search', flightSearchRoutes);
 
 // Root endpoint with API documentation
 app.get('/', (req, res) => {
@@ -89,6 +93,12 @@ app.get('/', (req, res) => {
         'search-booking': 'POST /api/v1/airline-booking/search-booking',
         'validate-localizador': 'POST /api/v1/airline-booking/validate-localizador',
         'airlines': 'GET /api/v1/airline-booking/airlines'
+      },
+      'flight-search': {
+        'search-flight': 'POST /api/v1/flight-search/search',
+        'search-by-airport': 'GET /api/v1/flight-search/airport/:airportCode',
+        'search-by-route': 'GET /api/v1/flight-search/route?origin=xxx&destination=yyy',
+        'search-live': 'GET /api/v1/flight-search/live'
       }
     },
     firecrawlKey: process.env.FIRECRAWL_API_KEY ? '***configured***' : 'missing'

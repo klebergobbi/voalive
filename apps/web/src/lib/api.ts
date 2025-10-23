@@ -128,6 +128,39 @@ class ApiService {
   async getAirlines() {
     return this.request('/api/v1/airline-booking/airlines');
   }
+
+  // Flight Search Methods (Real-time APIs)
+  async searchRealFlight(flightNumber: string, date?: string) {
+    return this.request('/api/v1/flight-search/search', {
+      method: 'POST',
+      body: JSON.stringify({
+        flightNumber: flightNumber.toUpperCase().trim(),
+        date
+      }),
+    });
+  }
+
+  async searchFlightsByAirport(airportCode: string, type: 'departures' | 'arrivals' = 'departures') {
+    return this.request(`/api/v1/flight-search/airport/${airportCode}?type=${type}`);
+  }
+
+  async searchFlightsByRoute(origin: string, destination: string, date?: string) {
+    const queryParams = new URLSearchParams({
+      origin,
+      destination,
+      ...(date && { date })
+    });
+    return this.request(`/api/v1/flight-search/route?${queryParams.toString()}`);
+  }
+
+  async searchLiveFlights(params?: { airline?: string; country?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.airline) queryParams.append('airline', params.airline);
+    if (params?.country) queryParams.append('country', params.country);
+
+    const query = queryParams.toString();
+    return this.request(`/api/v1/flight-search/live${query ? `?${query}` : ''}`);
+  }
 }
 
 export const apiService = new ApiService();
