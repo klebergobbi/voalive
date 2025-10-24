@@ -115,58 +115,11 @@ export default function DashboardPage() {
   };
 
   const handleFlightSearchFound = (flightData: any) => {
-    console.log('✈️ Vôo encontrado, abrindo visualização completa:', flightData);
+    console.log('✈️ Vôo encontrado, abrindo formulário editável:', flightData);
 
-    // Converter dados da API para o formato do BookingDetailsView
-    const bookingDetails = {
-      locator: flightData.numeroVoo || 'N/A',
-      airline: flightData.companhia || 'Companhia Aérea',
-      passengers: [
-        {
-          firstName: 'PASSAGEIRO',
-          lastName: 'EXEMPLO'
-        }
-      ],
-      baggage: {
-        personalItem: {
-          included: true,
-          quantity: 1,
-          description: 'Bolsa ou mochila pequena.'
-        },
-        carryOn: {
-          included: true,
-          quantity: 1,
-          weight: '10 kg',
-          description: 'Bagagem de mão 10 kg.'
-        },
-        checked: {
-          included: false,
-          quantity: 0,
-          weight: '23 kg',
-          description: 'Bagagem despachada 23 kg.'
-        }
-      },
-      outboundFlights: [
-        {
-          flightNumber: flightData.numeroVoo || 'N/A',
-          date: flightData.dataPartida || new Date().toLocaleDateString('pt-BR'),
-          departureTime: flightData.horarioPartida?.substring(11, 16) || flightData.horarioPartida || '00:00',
-          origin: flightData.origem || '???',
-          originName: flightData.origemNome || flightData.origem || 'Origem',
-          destination: flightData.destino || '???',
-          destinationName: flightData.destinoNome || flightData.destino || 'Destino',
-          arrivalTime: flightData.horarioChegada?.substring(11, 16) || flightData.horarioChegada || '00:00',
-          arrivalDate: flightData.dataChegada || flightData.dataPartida,
-          duration: flightData.duracao || 'N/A'
-        }
-      ],
-      outboundDate: flightData.dataPartida || new Date().toLocaleDateString('pt-BR'),
-      returnFlights: [],
-      returnDate: undefined
-    };
-
-    setFullBookingDetails(bookingDetails);
-    setShowBookingDetails(true);
+    // Passar dados para o formulário EDITÁVEL (AutoFillFlightForm)
+    setBookingData(flightData);
+    setShowAutoFillForm(true);
   };
 
   const handleEditFlight = (flight: Flight) => {
