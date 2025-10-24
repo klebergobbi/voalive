@@ -10,6 +10,7 @@ import { FlightMonitor } from '../../components/dashboard/flight-monitor';
 import { BookingSearchModal } from '../../components/dashboard/booking-search-modal';
 import { FlightSearchModal } from '../../components/dashboard/flight-search-modal';
 import { AutoFillFlightForm } from '../../components/dashboard/auto-fill-flight-form';
+import { BookingDetailsView } from '../../components/dashboard/booking-details-view';
 import { Flight, FlightCategoryType } from '@reservasegura/types';
 import { mockFlights } from '../../lib/mock-data';
 
@@ -24,7 +25,9 @@ export default function DashboardPage() {
   const [showBookingSearch, setShowBookingSearch] = useState(false);
   const [showFlightSearch, setShowFlightSearch] = useState(false);
   const [showAutoFillForm, setShowAutoFillForm] = useState(false);
+  const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [bookingData, setBookingData] = useState<any>(null);
+  const [fullBookingDetails, setFullBookingDetails] = useState<any>(null);
 
   // Filter flights based on tab, search, and airline
   const filteredFlights = useMemo(() => {
@@ -112,9 +115,58 @@ export default function DashboardPage() {
   };
 
   const handleFlightSearchFound = (flightData: any) => {
-    console.log('✈️ Vôo encontrado, abrindo formulário:', flightData);
-    setBookingData(flightData);
-    setShowAutoFillForm(true);
+    console.log('✈️ Vôo encontrado, abrindo visualização completa:', flightData);
+
+    // Converter dados da API para o formato do BookingDetailsView
+    const bookingDetails = {
+      locator: flightData.numeroVoo || 'N/A',
+      airline: flightData.companhia || 'Companhia Aérea',
+      passengers: [
+        {
+          firstName: 'PASSAGEIRO',
+          lastName: 'EXEMPLO'
+        }
+      ],
+      baggage: {
+        personalItem: {
+          included: true,
+          quantity: 1,
+          description: 'Bolsa ou mochila pequena.'
+        },
+        carryOn: {
+          included: true,
+          quantity: 1,
+          weight: '10 kg',
+          description: 'Bagagem de mão 10 kg.'
+        },
+        checked: {
+          included: false,
+          quantity: 0,
+          weight: '23 kg',
+          description: 'Bagagem despachada 23 kg.'
+        }
+      },
+      outboundFlights: [
+        {
+          flightNumber: flightData.numeroVoo || 'N/A',
+          date: flightData.dataPartida || new Date().toLocaleDateString('pt-BR'),
+          departureTime: flightData.horarioPartida?.substring(11, 16) || flightData.horarioPartida || '00:00',
+          origin: flightData.origem || '???',
+          originName: flightData.origemNome || flightData.origem || 'Origem',
+          destination: flightData.destino || '???',
+          destinationName: flightData.destinoNome || flightData.destino || 'Destino',
+          arrivalTime: flightData.horarioChegada?.substring(11, 16) || flightData.horarioChegada || '00:00',
+          arrivalDate: flightData.dataChegada || flightData.dataPartida,
+          duration: flightData.duracao || 'N/A'
+        }
+      ],
+      outboundDate: flightData.dataPartida || new Date().toLocaleDateString('pt-BR'),
+      returnFlights: [],
+      returnDate: undefined
+    };
+
+    setFullBookingDetails(bookingDetails);
+    setShowBookingDetails(true);
   };
 
   const handleEditFlight = (flight: Flight) => {
@@ -250,6 +302,12 @@ export default function DashboardPage() {
         onSubmit={handleSubmitFlight}
         bookingData={bookingData}
         flight={editingFlight}
+      />
+
+      <BookingDetailsView
+        open={showBookingDetails}
+        onOpenChange={setShowBookingDetails}
+        booking={fullBookingDetails}
       />
 
       <FloatingActionButton onClick={handleAddFlight} />
