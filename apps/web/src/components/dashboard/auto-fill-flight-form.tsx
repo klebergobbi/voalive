@@ -54,12 +54,19 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
   const [isAutoFilled, setIsAutoFilled] = useState(false);
 
   // Detectar se é busca de voo real (para exibir campos adicionais)
+  // CORRIGIDO: Verificar TODOS os campos extras possíveis, não apenas alguns
   const isRealFlightSearch = bookingData && (
     bookingData.posicao ||
     bookingData.horarioPartidaReal ||
     bookingData.horarioPartidaEstimado ||
+    bookingData.horarioChegadaReal ||
+    bookingData.horarioChegadaEstimado ||
     bookingData.portao ||
-    bookingData.terminal
+    bookingData.portaoChegada ||
+    bookingData.terminal ||
+    bookingData.terminalChegada ||
+    bookingData.status ||
+    bookingData.atrasado !== undefined
   );
 
   // Auto-preencher formulário quando dados da reserva OU busca de voo chegarem
@@ -76,9 +83,24 @@ export function AutoFillFlightForm({ open, onOpenChange, onSubmit, bookingData, 
         companhia: bookingData.companhia,
         status: bookingData.status
       });
+      console.log('✅ Campos EXTRAS recebidos:', {
+        horarioPartidaReal: bookingData.horarioPartidaReal,
+        horarioPartidaEstimado: bookingData.horarioPartidaEstimado,
+        horarioChegadaReal: bookingData.horarioChegadaReal,
+        horarioChegadaEstimado: bookingData.horarioChegadaEstimado,
+        portao: bookingData.portao,
+        portaoChegada: bookingData.portaoChegada,
+        terminal: bookingData.terminal,
+        terminalChegada: bookingData.terminalChegada,
+        posicao: bookingData.posicao ? 'SIM (GPS disponível)' : 'NÃO',
+        atrasado: bookingData.atrasado,
+        aeronave: bookingData.aeronave,
+        registro: bookingData.registro
+      });
 
       // DETECTAR SE É BUSCA DE VOO REAL ou RESERVA
       const isRealFlightSearch = bookingData.posicao || bookingData.horarioPartidaReal || bookingData.horarioPartidaEstimado;
+      console.log(`🎯 isRealFlightSearch = ${isRealFlightSearch} (seção de campos extras ${isRealFlightSearch ? 'SERÁ EXIBIDA ✅' : 'NÃO SERÁ EXIBIDA ❌'})`);
 
       if (isRealFlightSearch) {
         // ✈️ DADOS DE VOO REAL (da busca online)
