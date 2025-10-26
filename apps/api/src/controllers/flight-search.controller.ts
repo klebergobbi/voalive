@@ -30,48 +30,55 @@ export class FlightSearchController {
 
       if (flightData) {
         console.log(`✅ Vôo encontrado com sucesso!`);
-        console.log(`   Origem: ${flightData.origem || 'N/A'}`);
-        console.log(`   Destino: ${flightData.destino || 'N/A'}`);
+        console.log(`📦 Dados RAW do flightData:`, JSON.stringify(flightData, null, 2));
+        console.log(`   Origem: ${flightData.origem || flightData.origin || 'N/A'}`);
+        console.log(`   Destino: ${flightData.destino || flightData.destination || 'N/A'}`);
         console.log(`   Status: ${flightData.status || 'N/A'}`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+        // Helper para extrair hora de timestamp ISO
+        const extractTime = (isoString: string | null | undefined): string => {
+          if (!isoString) return '';
+          try {
+            const date = new Date(isoString);
+            return date.toISOString().split('T')[1].substring(0, 5); // HH:MM
+          } catch {
+            return '';
+          }
+        };
 
         res.status(200).json({
           success: true,
           data: {
             numeroVoo: flightNumber,
-            origem: flightData.origem || flightData.origin || flightData.departureAirport || '',
-            destino: flightData.destino || flightData.destination || flightData.arrivalAirport || '',
-            horarioPartida: flightData.horarioPartida || flightData.departureTime || '',
-            horarioChegada: flightData.horarioChegada || flightData.arrivalTime || '',
-            horarioPartidaReal: flightData.actualDeparture || flightData.dep_actual || null,
-            horarioChegadaReal: flightData.actualArrival || flightData.arr_actual || null,
-            horarioPartidaEstimado: flightData.estimatedDeparture || flightData.dep_estimated || null,
-            horarioChegadaEstimado: flightData.estimatedArrival || flightData.arr_estimated || null,
-            dataPartida: flightData.dataPartida || flightData.departureDate || new Date().toISOString().split('T')[0],
+            // Origem e Destino - priorizar campos em inglês (que vêm do convertToStandardFormat)
+            origem: flightData.origin || flightData.origem || '',
+            destino: flightData.destination || flightData.destino || '',
+            // Horários - usar campos do convertToStandardFormat
+            horarioPartida: extractTime(flightData.departureTime) || flightData.horarioPartida || '',
+            horarioChegada: extractTime(flightData.arrivalTime) || flightData.horarioChegada || '',
+            horarioPartidaReal: extractTime(flightData.actualDeparture) || null,
+            horarioChegadaReal: extractTime(flightData.actualArrival) || null,
+            horarioPartidaEstimado: extractTime(flightData.estimatedDeparture) || null,
+            horarioChegadaEstimado: extractTime(flightData.estimatedArrival) || null,
+            dataPartida: flightData.flightDate || new Date().toISOString().split('T')[0],
             status: flightData.status || 'Desconhecido',
-            companhia: flightData.companhia || flightData.airline || flightData.airlineName || this.detectAirlineFromFlightNumber(flightNumber),
+            companhia: flightData.airlineName || flightData.airline || this.detectAirlineFromFlightNumber(flightNumber),
             // Informações de Terminal e Portão
-            portao: flightData.portao || flightData.gate || flightData.departureGate || null,
-            portaoChegada: flightData.arrivalGate || flightData.arr_gate || null,
-            terminal: flightData.terminal || flightData.departureTerminal || flightData.dep_terminal || null,
-            terminalChegada: flightData.arrivalTerminal || flightData.arr_terminal || null,
+            portao: flightData.departureGate || null,
+            portaoChegada: flightData.arrivalGate || null,
+            terminal: flightData.departureTerminal || null,
+            terminalChegada: flightData.arrivalTerminal || null,
             // Informações de GPS e Posição (se voo estiver em tempo real)
-            posicao: flightData.position || (flightData.latitude && flightData.longitude ? {
-              latitude: flightData.latitude,
-              longitude: flightData.longitude,
-              altitude: flightData.altitude || flightData.alt || null,
-              velocidade: flightData.velocidade || flightData.speed || null,
-              direcao: flightData.direction || flightData.dir || null,
-              velocidadeVertical: flightData.verticalSpeed || flightData.v_speed || null
-            } : null),
+            posicao: flightData.position || null,
             // Informações de Atraso
-            atrasado: flightData.delayed || 0,
-            duracao: flightData.duration || null,
+            atrasado: flightData.departureDelay || flightData.arrivalDelay || 0,
+            duracao: null,
             // Informações da aeronave
-            aeronave: flightData.aircraft || flightData.aircraft_icao || null,
-            registro: flightData.registration || flightData.reg_number || null,
+            aeronave: flightData.aircraft || flightData.aircraftIcao || null,
+            registro: flightData.registration || null,
             // Metadados
-            ultimaAtualizacao: flightData.updated || new Date().toISOString(),
+            ultimaAtualizacao: new Date().toISOString(),
           },
           source: flightData.source || 'API Real',
           timestamp: new Date().toISOString(),
