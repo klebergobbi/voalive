@@ -378,9 +378,9 @@ export class HealthMonitorService {
   }
 
   private calculateErrorRate(): number {
-    // Simplified error rate calculation
-    // In production, this would use actual metrics from the metrics middleware
-    return Math.random() * 10; // Mock data
+    // Simplified error rate calculation - returns 0 until real metrics are implemented
+    // TODO: In production, use actual metrics from the metrics middleware
+    return 0; // No real metrics available yet
   }
 
   private calculateAverageResponseTime(health: SystemHealth): number {

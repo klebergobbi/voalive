@@ -142,9 +142,9 @@ export class RealFlightSearchService {
         return flightAwareData;
       }
 
-      // ÚLTIMO FALLBACK: Dados mocados para demonstração quando APIs não disponíveis
-      console.log('⚠️ Nenhuma API retornou dados. Usando dados mocados para demonstração...');
-      return this.getMockedFlightData(flightNumber);
+      // Nenhuma fonte de dados retornou informações
+      console.log('❌ Nenhuma API retornou dados reais para o voo.');
+      return null; // No real data found
 
     } catch (error) {
       console.error('❌ Erro ao buscar voo real:', error);
@@ -906,100 +906,6 @@ export class RealFlightSearchService {
       portao: flight.gate,
       terminal: flight.terminal,
       assento: flight.seat
-    };
-  }
-
-  /**
-   * Retorna dados mocados realistas para demonstração
-   * Usado quando APIs externas não estão disponíveis
-   */
-  private getMockedFlightData(flightNumber: string): any {
-    const airline = this.detectAirlineFromFlightNumber(flightNumber);
-    const now = new Date();
-    const today = now.toISOString().split('T')[0];
-
-    // Dados mocados realistas baseados no número do voo
-    const mockedFlights: { [key: string]: any } = {
-      'G32067': {
-        origin: 'GRU',
-        destination: 'BSB',
-        departureTime: `${today}T10:30:00Z`,
-        arrivalTime: `${today}T12:15:00Z`,
-        actualDeparture: `${today}T10:35:00Z`,
-        estimatedArrival: `${today}T12:20:00Z`,
-        departureGate: 'B12',
-        departureTerminal: '2',
-        arrivalGate: 'A5',
-        arrivalTerminal: '1',
-        aircraft: 'B737-800',
-        registration: 'PR-GXO',
-        status: 'Em voo',
-        departureDelay: 5,
-        position: {
-          latitude: -16.7230,
-          longitude: -49.2781,
-          altitude: 35000,
-          speed: 820,
-          direction: 310
-        }
-      },
-      'LA3789': {
-        origin: 'GRU',
-        destination: 'GIG',
-        departureTime: `${today}T14:00:00Z`,
-        arrivalTime: `${today}T15:10:00Z`,
-        actualDeparture: `${today}T14:10:00Z`,
-        estimatedArrival: `${today}T15:20:00Z`,
-        departureGate: 'D20',
-        departureTerminal: '3',
-        arrivalGate: 'C10',
-        arrivalTerminal: '2',
-        aircraft: 'A320',
-        registration: 'PT-TMZ',
-        status: 'Atrasado',
-        departureDelay: 10
-      },
-      'AD4567': {
-        origin: 'VCP',
-        destination: 'CGH',
-        departureTime: `${today}T08:00:00Z`,
-        arrivalTime: `${today}T09:30:00Z`,
-        actualDeparture: `${today}T08:00:00Z`,
-        actualArrival: `${today}T09:25:00Z`,
-        departureGate: 'A3',
-        departureTerminal: '1',
-        arrivalGate: 'B8',
-        arrivalTerminal: '1',
-        aircraft: 'A320neo',
-        registration: 'PR-YRX',
-        status: 'Aterrissou',
-        departureDelay: 0
-      }
-    };
-
-    // Pegar dados mocados ou gerar genéricos
-    const mockedData = mockedFlights[flightNumber] || {
-      origin: 'GRU',
-      destination: 'BSB',
-      departureTime: `${today}T${String(now.getHours()).padStart(2, '0')}:00:00Z`,
-      arrivalTime: `${today}T${String(now.getHours() + 2).padStart(2, '0')}:00:00Z`,
-      departureGate: 'A' + (Math.floor(Math.random() * 20) + 1),
-      departureTerminal: String(Math.floor(Math.random() * 3) + 1),
-      arrivalGate: 'B' + (Math.floor(Math.random() * 20) + 1),
-      arrivalTerminal: String(Math.floor(Math.random() * 3) + 1),
-      aircraft: 'B737-800',
-      status: 'Agendado'
-    };
-
-    console.log(`📝 Usando dados mocados para ${flightNumber}: ${mockedData.origin} → ${mockedData.destination}`);
-
-    return {
-      flightNumber: flightNumber,
-      airline: airline,
-      airlineName: airline,
-      ...mockedData,
-      flightDate: today,
-      source: 'Mock-Demo'
     };
   }
 

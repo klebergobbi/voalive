@@ -43,35 +43,87 @@ export class AirlineBookingService {
   }
 
   async searchBooking(request: BookingSearchRequest): Promise<BookingData | null> {
-    console.log(`🔍 Buscando reserva: ${request.localizador} - ${request.sobrenome}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🔍 BUSCA DE RESERVA INICIADA`);
+    console.log(`   Localizador: ${request.localizador}`);
+    console.log(`   Sobrenome: ${request.sobrenome || 'N/A'}`);
+    console.log(`   Origem: ${request.origem || 'N/A'}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-    // PRIMEIRO: Buscar no banco de dados local
-    console.log('📊 Buscando no banco de dados local...');
+    // PASSO 1: Buscar no banco de dados local
+    console.log('\n📍 Passo 1: Buscando no banco de dados local...');
     const localBooking = await this.searchInDatabase(request);
     if (localBooking) {
       console.log('✅ Reserva encontrada no banco de dados local!');
+      console.log(`   Voo: ${localBooking.numeroVoo}`);
+      console.log(`   Rota: ${localBooking.origem} → ${localBooking.destino}`);
       return localBooking;
     }
+    console.log('⚠️  Reserva não encontrada no banco local');
 
-    // SEGUNDO: Tentar em cada companhia aérea
+    // PASSO 2: Tentar extrair número do voo do localizador
+    console.log('\n📍 Passo 2: Analisando código de reserva...');
+    const possibleFlightNumber = this.extractFlightNumberFromLocalizador(request.localizador);
+
+    if (possibleFlightNumber) {
+      console.log(`💡 Possível número de voo identificado: ${possibleFlightNumber}`);
+
+      // Buscar informações reais do voo via API
+      console.log('🔄 Buscando informações do voo via API...');
+      const flightData = await this.realFlightSearch.searchRealFlightByNumber(possibleFlightNumber);
+
+      if (flightData && (flightData.origin || flightData.destination)) {
+        console.log('✅ Informações do voo encontradas!');
+        console.log(`   Rota: ${flightData.origin} → ${flightData.destination}`);
+
+        const airline = this.detectAirlineFromLocalizador(request.localizador);
+        const result = this.convertFlightDataToBookingData(flightData, request, airline);
+
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        console.log(`✅ BUSCA CONCLUÍDA - DADOS REAIS`);
+        console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+        return result;
+      }
+    }
+
+    // PASSO 3: Tentar buscar via web scraping (com timeout curto)
+    console.log('\n📍 Passo 3: Tentando web scraping das companhias...');
     const airlines = ['GOL', 'LATAM', 'AZUL'] as const;
 
     for (const airline of airlines) {
       try {
-        console.log(`🛫 Tentando buscar na ${airline}...`);
-        const result = await this.searchInAirline(airline, request);
+        console.log(`🛫 Tentando ${airline}...`);
+
+        const result = await Promise.race([
+          this.searchInAirline(airline, request),
+          new Promise<null>((resolve) => setTimeout(() => {
+            console.log(`   ⏱️ Timeout em ${airline}`);
+            resolve(null);
+          }, 2000)) // Reduzido para 2s
+        ]);
 
         if (result) {
           console.log(`✅ Reserva encontrada na ${airline}!`);
           return result;
         }
       } catch (error) {
-        console.error(`❌ Erro ao buscar na ${airline}:`, error);
+        console.log(`   ❌ Erro em ${airline}`);
         continue;
       }
     }
 
-    console.log('❌ Reserva não encontrada em nenhuma companhia');
+    // PASSO 4: Retornar NULL e explicar a limitação
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('❌ RESERVA NÃO ENCONTRADA');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('\n💡 INSTRUÇÕES PARA O USUÁRIO:');
+    console.log('   1. Códigos de reserva (PNR) não são acessíveis via APIs públicas');
+    console.log('   2. Para buscar sua reserva, você precisa:');
+    console.log('      a) Informar o NÚMERO DO VOO (ex: G31234, LA4567)');
+    console.log('      b) OU cadastrar manualmente sua reserva no sistema');
+    console.log('   3. Com o número do voo, conseguimos buscar dados em tempo real\n');
+
     return null;
   }
 
@@ -445,6 +497,51 @@ export class AirlineBookingService {
     if (upper.includes('AZUL') || upper.includes('AD')) return 'AZUL';
 
     return 'GOL'; // default
+  }
+
+  /**
+   * Gera dados mock para demonstração
+   */
+  private generateMockBookingData(request: BookingSearchRequest): BookingData {
+    // Detectar companhia baseada no localizador
+    let companhia: 'GOL' | 'LATAM' | 'AZUL' = 'GOL';
+    const loc = request.localizador.toUpperCase();
+
+    if (loc.startsWith('LA') || loc.startsWith('JJ')) {
+      companhia = 'LATAM';
+    } else if (loc.startsWith('AD')) {
+      companhia = 'AZUL';
+    }
+
+    // Gerar horários baseados no horário atual
+    const now = new Date();
+    const dataPartida = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Amanhã
+    const dataChegada = new Date(dataPartida.getTime() + 2 * 60 * 60 * 1000); // +2 horas
+
+    const origem = request.origem || 'GRU';
+    const destino = origem === 'SLZ' ? 'GRU' : 'BSB';
+
+    return {
+      localizador: request.localizador.toUpperCase(),
+      sobrenome: request.sobrenome.toUpperCase() || 'PASSAGEIRO',
+      origem: origem,
+      destino: destino,
+      dataPartida: dataPartida.toISOString().split('T')[0],
+      dataChegada: dataChegada.toISOString().split('T')[0],
+      horarioPartida: '08:30',
+      horarioChegada: '10:45',
+      numeroVoo: `${companhia === 'GOL' ? 'G3' : companhia === 'LATAM' ? 'LA' : 'AD'}1234`,
+      companhia: companhia,
+      status: 'CONFIRMADO',
+      portaoEmbarque: '12',
+      terminal: '2',
+      assento: '15A',
+      classe: 'ECONÔMICA',
+      passageiro: request.sobrenome.toUpperCase() || 'PASSAGEIRO',
+      documento: 'CPF: ***.***.***-**',
+      telefone: '(11) 9****-****',
+      email: '***@***mail.com'
+    };
   }
 
   /**

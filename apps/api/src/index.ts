@@ -4,17 +4,25 @@ dotenv.config();
 
 // Now load the rest
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import 'express-async-errors';
 import { flightScraperRoutes } from './routes/flight-scraper.routes';
 import airlineBookingRoutes from './routes/airline-booking.routes';
 import flightSearchRoutes from './routes/flight-search.routes';
+import { flightRoutes } from './routes/flight.routes';
+import { authRoutes } from './routes/auth.routes';
+import { bookingRoutes } from './routes/booking.routes';
+import { transactionRoutes } from './routes/transaction.routes';
+import bookingMonitorRoutes from './routes/booking-monitor.routes';
 import { getFlightScraperService } from './services/flight-scraper.service';
 import { metricsMiddleware, prometheusMetricsHandler, jsonMetricsHandler } from './middlewares/metrics.middleware';
 import { getHealthMonitorService } from './services/health-monitor.service';
+import { getBookingMonitorService } from './services/booking-monitor.service';
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 4000;
 
 app.use(helmet());
@@ -67,41 +75,52 @@ app.get('/metrics', prometheusMetricsHandler);
 app.get('/api/metrics', jsonMetricsHandler);
 
 // API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/flights', flightRoutes);
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/transactions', transactionRoutes);
 app.use('/api/v1/flight-scraper', flightScraperRoutes);
 app.use('/api/v1/airline-booking', airlineBookingRoutes);
 app.use('/api/v1/flight-search', flightSearchRoutes);
+app.use('/api/v2/booking-monitor', bookingMonitorRoutes);
+console.log('✅ Sistema de monitoramento avançado de reservas carregado');
+
+// ✨ MÓDULO DE MONITORAMENTO DE RESERVAS EM TEMPO REAL
+try {
+  const { initReservasModule } = require('./modules/reservas');
+  initReservasModule(app, server);
+  console.log('✅ Módulo de Monitoramento de Reservas inicializado');
+} catch (error) {
+  console.warn('⚠️  Módulo de Reservas não pôde ser inicializado:', error instanceof Error ? error.message : error);
+}
 
 // Root endpoint with API documentation
 app.get('/', (req, res) => {
   res.json({
     name: 'VoaLive Flight Management API',
     version: '1.0.0',
+    modules: {
+      'reservas': '✅ Sistema de Monitoramento de Reservas em Tempo Real'
+    },
     endpoints: {
       health: 'GET /health',
+      'reservas-health': 'GET /api/health/reservas',
+      'reservas-monitorar': 'POST /api/reservas/monitorar',
+      'reservas-status': 'GET /api/reservas/:codigo/status',
+      'reservas-companhias': 'GET /api/reservas/companhias',
+      auth: {
+        'register': 'POST /api/auth/register',
+        'login': 'POST /api/auth/login'
+      },
+      flights: {
+        'list-all': 'GET /api/flights',
+        'stats': 'GET /api/flights/stats'
+      },
       scraping: {
         'scrape-flight': 'POST /api/v1/flight-scraper/scrape/flight',
-        'scrape-airport': 'POST /api/v1/flight-scraper/scrape/airport',
-        'get-flight': 'GET /api/v1/flight-scraper/flights/:flightNumber',
-        'get-airport-flights': 'GET /api/v1/flight-scraper/airports/:airportCode/flights',
-        'search-flights': 'GET /api/v1/flight-scraper/flights/search',
-        'recent-flights': 'GET /api/v1/flight-scraper/flights/recent',
-        'start-scheduler': 'POST /api/v1/flight-scraper/scheduler/start',
-        'stop-scheduler': 'POST /api/v1/flight-scraper/scheduler/stop',
         'stats': 'GET /api/v1/flight-scraper/stats'
-      },
-      'airline-booking': {
-        'search-booking': 'POST /api/v1/airline-booking/search-booking',
-        'validate-localizador': 'POST /api/v1/airline-booking/validate-localizador',
-        'airlines': 'GET /api/v1/airline-booking/airlines'
-      },
-      'flight-search': {
-        'search-flight': 'POST /api/v1/flight-search/search',
-        'search-by-airport': 'GET /api/v1/flight-search/airport/:airportCode',
-        'search-by-route': 'GET /api/v1/flight-search/route?origin=xxx&destination=yyy',
-        'search-live': 'GET /api/v1/flight-search/live'
       }
-    },
-    firecrawlKey: process.env.FIRECRAWL_API_KEY ? '***configured***' : 'missing'
+    }
   });
 });
 
@@ -119,15 +138,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Endpoint not found',
-    availableEndpoints: [
-      'GET /',
-      'GET /health',
-      'POST /api/v1/flight-scraper/scrape/flight',
-      'POST /api/v1/flight-scraper/scrape/airport',
-      'GET /api/v1/flight-scraper/flights/:flightNumber',
-      'GET /api/v1/flight-scraper/airports/:airportCode/flights'
-    ]
+    message: 'Endpoint not found'
   });
 });
 
@@ -146,10 +157,12 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 VoaLive API is running on http://localhost:${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`📖 API docs: http://localhost:${PORT}/`);
+  console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
+  console.log(`📦 Reservas API: http://localhost:${PORT}/api/reservas/companhias`);
 
   // Optionally start the scheduler on server startup
   if (process.env.AUTO_START_SCRAPER === 'true') {
@@ -161,6 +174,6 @@ app.listen(PORT, () => {
       } catch (error) {
         console.error('❌ Failed to start scheduled scraping:', error);
       }
-    }, 5000); // Wait 5 seconds after server start
+    }, 5000);
   }
 });

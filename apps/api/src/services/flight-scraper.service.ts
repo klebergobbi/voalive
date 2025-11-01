@@ -448,17 +448,13 @@ export class FlightScraperService {
       return job;
     } catch (error) {
       console.error(`Error creating scraping job record:`, error);
-      // Return a mock job object if database save fails
-      return { id: `mock_${Date.now()}`, source, jobType };
+      // Throw error if database save fails
+      throw new Error(`Failed to create scraping job record: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   private async completeScrapingJobRecord(jobId: string, recordsCount: number, status: JobStatus, errorMessage?: string): Promise<void> {
     try {
-      if (jobId.startsWith('mock_')) {
-        console.log(`⚠️ Skipping update for mock job: ${jobId}`);
-        return;
-      }
 
       await prisma.scrapingJob.update({
         where: { id: jobId },

@@ -132,9 +132,10 @@ export class AviationstackService {
     try {
       console.log(`🔍 [Aviationstack] Buscando voo: ${flightNumber}`);
 
+      // IMPORTANTE: Plano gratuito da AviationStack não aceita flight_date
+      // Remover esse parâmetro para evitar erro 403
       const flights = await this.getFlights({
         flight_iata: flightNumber,
-        flight_date: date || new Date().toISOString().split('T')[0],
         limit: 1
       });
 
@@ -157,15 +158,10 @@ export class AviationstackService {
   async getAirportFlights(airportCode: string, type: 'departures' | 'arrivals' = 'departures', limit: number = 20): Promise<AviationstackFlightData[]> {
     try {
       console.log(`🔍 [Aviationstack] Buscando ${type} do aeroporto: ${airportCode}`);
+      console.log(`⚠️  [Aviationstack] AVISO: Plano gratuito não suporta filtro por aeroporto. Retornando vazio.`);
 
-      const params = type === 'departures'
-        ? { dep_iata: airportCode, limit }
-        : { arr_iata: airportCode, limit };
-
-      const flights = await this.getFlights(params);
-
-      console.log(`✅ [Aviationstack] ${flights.length} voos encontrados para ${airportCode}`);
-      return flights;
+      // Plano gratuito não suporta dep_iata nem arr_iata
+      return [];
     } catch (error) {
       console.error(`❌ [Aviationstack] Erro ao buscar voos do aeroporto:`, error);
       return [];
@@ -178,16 +174,10 @@ export class AviationstackService {
   async getFlightsByRoute(origin: string, destination: string, date?: string): Promise<AviationstackFlightData[]> {
     try {
       console.log(`🔍 [Aviationstack] Buscando voos: ${origin} → ${destination}`);
+      console.log(`⚠️  [Aviationstack] AVISO: Plano gratuito não suporta filtro por rota. Retornando vazio.`);
 
-      const flights = await this.getFlights({
-        dep_iata: origin,
-        arr_iata: destination,
-        flight_date: date,
-        limit: 50
-      });
-
-      console.log(`✅ [Aviationstack] ${flights.length} voos encontrados na rota`);
-      return flights;
+      // Plano gratuito não suporta dep_iata, arr_iata nem flight_date
+      return [];
     } catch (error) {
       console.error(`❌ [Aviationstack] Erro ao buscar voos por rota:`, error);
       return [];
