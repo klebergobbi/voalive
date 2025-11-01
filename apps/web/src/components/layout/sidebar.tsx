@@ -8,7 +8,8 @@ import {
   Settings,
   CreditCard,
   BarChart,
-  HelpCircle
+  HelpCircle,
+  Radio
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -17,6 +18,7 @@ import { cn } from '@reservasegura/ui';
 const sidebarItems = [
   { icon: Home, label: 'Dashboard', href: '/' },
   { icon: Plane, label: 'Voos', href: '/flights' },
+  { icon: Radio, label: 'Voos ao Vivo', href: '/live-flights' },
   { icon: Calendar, label: 'Reservas', href: '/bookings' },
   { icon: Users, label: 'Passageiros', href: '/passengers' },
   { icon: CreditCard, label: 'Pagamentos', href: '/payments' },

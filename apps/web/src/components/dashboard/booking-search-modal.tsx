@@ -20,6 +20,25 @@ interface BookingData {
   assento?: string;
   classe: string;
   passageiro: string;
+  // Campos extras de voo real (busca por número de voo)
+  horarioPartidaReal?: string;
+  horarioPartidaEstimado?: string;
+  horarioChegadaReal?: string;
+  horarioChegadaEstimado?: string;
+  portao?: string;
+  portaoChegada?: string;
+  terminalChegada?: string;
+  atrasado?: number;
+  posicao?: {
+    latitude: number;
+    longitude: number;
+    altitude?: number;
+    velocidade?: number;
+    direcao?: number;
+  };
+  aeronave?: string;
+  registro?: string;
+  ultimaAtualizacao?: string;
 }
 
 interface BookingSearchModalProps {
@@ -29,52 +48,151 @@ interface BookingSearchModalProps {
 }
 
 export function BookingSearchModal({ open, onOpenChange, onBookingFound }: BookingSearchModalProps) {
-  const [searchData, setSearchData] = useState({
-    localizador: '',
-    sobrenome: '',
-    origem: ''
-  });
-
+  const [numeroVoo, setNumeroVoo] = useState('');
+  const [localizador, setLocalizador] = useState('');
+  const [ultimoNome, setUltimoNome] = useState('');
+  const [origem, setOrigem] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [validationInfo, setValidationInfo] = useState<any>(null);
 
-  const validateLocalizador = async (localizador: string) => {
-    if (localizador.length >= 5) {
-      try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-        const response = await fetch(`${apiUrl}/api/v1/airline-booking/validate-localizador`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ localizador }),
-        });
-
-        const result = await response.json();
-        if (result.success) {
-          setValidationInfo(result.data);
-        }
-      } catch (error) {
-        console.error('Erro ao validar localizador:', error);
-      }
+  const isGol = (): boolean => {
+    if (numeroVoo.trim()) {
+      return numeroVoo.trim().toUpperCase().startsWith('G3');
     }
-  };
-
-  const handleLocalizadorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.toUpperCase();
-    setSearchData(prev => ({ ...prev, localizador: value }));
-    setError('');
-    validateLocalizador(value);
+    const loc = localizador.trim().toUpperCase();
+    return loc.startsWith('G3') || loc.length === 6; // GOL usa localizadores de 6 caracteres
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Se tem número de voo, busca por voo
+    if (numeroVoo.trim()) {
+      await handleFlightSearch();
+    } else {
+      // Senão, busca por reserva (comportamento antigo)
+      await handleBookingSearch();
+    }
+  };
+
+  const handleFlightSearch = async () => {
     setLoading(true);
     setError('');
 
     try {
-      console.log('🔍 Buscando reserva:', searchData);
+      console.log('🔍 Buscando voo:', numeroVoo);
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/v1/flight-search/search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          flightNumber: numeroVoo.trim().toUpperCase()
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        console.log('✅ Voo encontrado:', result.data);
+
+        // Converter dados do voo para formato de reserva (COM TODOS OS CAMPOS EXTRAS)
+        const bookingData: BookingData = {
+          numeroVoo: result.data.numeroVoo || numeroVoo.trim().toUpperCase(),
+          origem: result.data.origem || '',
+          destino: result.data.destino || '',
+          dataPartida: result.data.dataPartida || new Date().toISOString().split('T')[0],
+          dataChegada: result.data.dataPartida || new Date().toISOString().split('T')[0],
+          horarioPartida: result.data.horarioPartida || '',
+          horarioChegada: result.data.horarioChegada || '',
+          companhia: (result.data.companhia?.toUpperCase().includes('GOL') ? 'GOL' :
+                     result.data.companhia?.toUpperCase().includes('LATAM') ? 'LATAM' :
+                     result.data.companhia?.toUpperCase().includes('AZUL') ? 'AZUL' : 'GOL') as any,
+          status: result.data.status || 'AGENDADO',
+          localizador: localizador.trim().toUpperCase() || '',
+          sobrenome: ultimoNome.trim().toUpperCase() || '',
+          portaoEmbarque: result.data.portao || undefined,
+          terminal: result.data.terminal || undefined,
+          classe: 'ECONOMICA',
+          passageiro: ultimoNome.trim().toUpperCase() || 'PASSAGEIRO',
+
+          // ✈️ CAMPOS EXTRAS DE VOO REAL (necessários para exibir seção de monitoramento)
+          horarioPartidaReal: result.data.horarioPartidaReal || undefined,
+          horarioPartidaEstimado: result.data.horarioPartidaEstimado || undefined,
+          horarioChegadaReal: result.data.horarioChegadaReal || undefined,
+          horarioChegadaEstimado: result.data.horarioChegadaEstimado || undefined,
+          portao: result.data.portao || undefined,
+          portaoChegada: result.data.portaoChegada || undefined,
+          terminalChegada: result.data.terminalChegada || undefined,
+          atrasado: result.data.atrasado || undefined,
+          posicao: result.data.posicao || undefined,
+          aeronave: result.data.aeronave || undefined,
+          registro: result.data.registro || undefined,
+          ultimaAtualizacao: result.data.ultimaAtualizacao || new Date().toISOString()
+        };
+
+        console.log('📦 BookingData criado com campos extras:', {
+          posicao: bookingData.posicao ? '✅ SIM' : '❌ NÃO',
+          horarioPartidaReal: bookingData.horarioPartidaReal || 'N/A',
+          horarioPartidaEstimado: bookingData.horarioPartidaEstimado || 'N/A',
+          portao: bookingData.portao || 'N/A',
+          terminal: bookingData.terminal || 'N/A',
+          atrasado: bookingData.atrasado || 0
+        });
+
+        onBookingFound(bookingData);
+        onOpenChange(false);
+
+        // Limpar campos
+        setNumeroVoo('');
+        setLocalizador('');
+        setUltimoNome('');
+        setOrigem('');
+      } else {
+        setError(result.message || result.error || 'Voo não encontrado. Verifique o número e tente novamente.');
+
+        // Mostrar sugestões se disponíveis
+        if (result.suggestions && result.suggestions.length > 0) {
+          console.log('💡 Sugestões:', result.suggestions);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erro na busca de voo:', error);
+      setError('Erro ao conectar com o servidor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBookingSearch = async () => {
+    // Validação específica para GOL
+    if (isGol()) {
+      if (!ultimoNome.trim()) {
+        setError('Para reservas GOL, o Último Nome é obrigatório');
+        return;
+      }
+      if (!origem.trim() || origem.trim().length !== 3) {
+        setError('Para reservas GOL, a Origem (código IATA de 3 letras) é obrigatória');
+        return;
+      }
+    }
+
+    if (!localizador.trim()) {
+      setError('Informe o Localizador ou o Número do Vôo');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      console.log('🔍 Buscando reserva:', {
+        localizador,
+        ultimoNome: ultimoNome || '[não informado]',
+        origem: origem || '[não informado]'
+      });
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
       const response = await fetch(`${apiUrl}/api/v1/airline-booking/search-booking`, {
@@ -82,7 +200,11 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(searchData),
+        body: JSON.stringify({
+          localizador: localizador.trim().toUpperCase(),
+          sobrenome: ultimoNome.trim().toUpperCase() || '',
+          origem: origem.trim().toUpperCase() || ''
+        }),
       });
 
       const result = await response.json();
@@ -91,11 +213,17 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
         console.log('✅ Reserva encontrada:', result.data);
         onBookingFound(result.data);
         onOpenChange(false);
-        // Reset form
-        setSearchData({ localizador: '', sobrenome: '', origem: '' });
-        setValidationInfo(null);
+        setNumeroVoo('');
+        setLocalizador('');
+        setUltimoNome('');
+        setOrigem('');
       } else {
-        setError(result.error || 'Reserva não encontrada');
+        setError(result.message || result.error || 'Reserva não encontrada. Verifique os dados e tente novamente.');
+
+        // Mostrar instruções se disponíveis
+        if (result.instructions && result.instructions.length > 0) {
+          console.log('💡 Instruções:', result.instructions);
+        }
       }
     } catch (error) {
       console.error('❌ Erro na busca:', error);
@@ -105,79 +233,118 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
     }
   };
 
-  const isFormValid = searchData.localizador.length >= 5 &&
-                     searchData.sobrenome.length >= 2;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="text-2xl">✈️</span>
-            Buscar Vôo
+            Buscar Reserva
           </DialogTitle>
-          <p className="text-sm text-gray-600 mt-2">
-            Digite o localizador, sobrenome e opcionalmente a origem para buscar seu vôo nas companhias aéreas.
-          </p>
         </DialogHeader>
 
         <form onSubmit={handleSearch} className="space-y-4">
+          {/* NOVO CAMPO: Número do Vôo */}
           <div className="space-y-2">
-            <Label htmlFor="localizador">Localizador *</Label>
-            <div className="space-y-1">
-              <Input
-                id="localizador"
-                value={searchData.localizador}
-                onChange={handleLocalizadorChange}
-                placeholder="Ex: ABC123, LA1234, G31234"
-                required
-                minLength={5}
-                maxLength={8}
-                className={validationInfo?.isValid === false ? 'border-red-500' : validationInfo?.isValid ? 'border-green-500' : ''}
-              />
-              {validationInfo && (
-                <div className="text-xs">
-                  {validationInfo.isValid ? (
-                    <span className="text-green-600 flex items-center gap-1">
-                      <span>✓</span>
-                      Localizador válido - Sugerida: {validationInfo.suggestedAirline}
-                    </span>
-                  ) : (
-                    <span className="text-red-600 flex items-center gap-1">
-                      <span>⚠</span>
-                      Localizador deve ter 5-8 caracteres alfanuméricos
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+            <Label htmlFor="numeroVoo" className="flex items-center gap-2">
+              <span>✈️</span>
+              <span>Número do Vôo (Recomendado)</span>
+            </Label>
+            <Input
+              id="numeroVoo"
+              value={numeroVoo}
+              onChange={(e) => {
+                setNumeroVoo(e.target.value.toUpperCase());
+                setError('');
+              }}
+              placeholder="Ex: G31890, LA3789, AD4506"
+              minLength={4}
+              maxLength={8}
+              className="text-lg font-mono"
+              autoFocus
+            />
+            <p className="text-xs text-gray-500">
+              💡 Para busca mais rápida e precisa, informe o número do vôo
+            </p>
+          </div>
+
+          {/* Separador visual */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 border-t"></div>
+            <span className="text-xs text-gray-400 uppercase">ou use o localizador</span>
+            <div className="flex-1 border-t"></div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="sobrenome">Sobrenome do Passageiro *</Label>
+            <Label htmlFor="localizador">
+              Localizador {!numeroVoo.trim() && isGol() && <span className="text-red-600">*</span>}
+            </Label>
             <Input
-              id="sobrenome"
-              value={searchData.sobrenome}
-              onChange={(e) => setSearchData(prev => ({ ...prev, sobrenome: e.target.value.toUpperCase() }))}
-              placeholder="Ex: SILVA"
-              required
-              minLength={2}
+              id="localizador"
+              value={localizador}
+              onChange={(e) => {
+                setLocalizador(e.target.value.toUpperCase());
+                setError('');
+              }}
+              placeholder="Ex: ABC123, PDCDX"
+              minLength={5}
+              maxLength={8}
+              className="text-lg font-mono"
+              required={!numeroVoo.trim()}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="origem">Aeroporto de Origem (opcional)</Label>
+            <Label htmlFor="ultimoNome">
+              Último Nome {!numeroVoo.trim() && isGol() && <span className="text-red-600">*</span>}
+            </Label>
+            <Input
+              id="ultimoNome"
+              value={ultimoNome}
+              onChange={(e) => {
+                setUltimoNome(e.target.value.toUpperCase());
+                setError('');
+              }}
+              placeholder="Ex: SILVA"
+              className="font-mono"
+              required={!numeroVoo.trim() && isGol()}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="origem">
+              Origem (IATA) {!numeroVoo.trim() && isGol() && <span className="text-red-600">*</span>}
+            </Label>
             <Input
               id="origem"
-              value={searchData.origem}
-              onChange={(e) => setSearchData(prev => ({ ...prev, origem: e.target.value.toUpperCase() }))}
-              placeholder="Ex: GRU, CGH, SDU"
+              value={origem}
+              onChange={(e) => {
+                setOrigem(e.target.value.toUpperCase());
+                setError('');
+              }}
+              placeholder="Ex: GRU, CGH, SDU, SLZ"
               maxLength={3}
+              className="font-mono"
+              required={!numeroVoo.trim() && isGol()}
             />
-            <div className="text-xs text-gray-500">
-              Se não souber, deixe em branco - será detectado automaticamente
-            </div>
           </div>
+
+          {/* Avisos */}
+          {numeroVoo.trim() && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>✈️ Busca por Vôo:</strong> Usando APIs de rastreamento em tempo real (Aviationstack).
+              </p>
+            </div>
+          )}
+
+          {!numeroVoo.trim() && isGol() && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                <strong>Reservas GOL:</strong> É necessário informar o Localizador, Último Nome e Origem.
+              </p>
+            </div>
+          )}
 
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
@@ -188,39 +355,37 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-4 border-t">
-            <div className="text-xs text-gray-500">
-              Suporta: GOL, LATAM, Azul
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={!isFormValid || loading}
-                className="min-w-24"
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Buscando...
-                  </div>
-                ) : (
-                  'Buscar'
-                )}
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false);
+                setNumeroVoo('');
+                setLocalizador('');
+                setUltimoNome('');
+                setOrigem('');
+                setError('');
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={(numeroVoo.trim().length < 4 && localizador.trim().length < 5) || loading}
+              className="min-w-24"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Buscando...
+                </div>
+              ) : (
+                'Buscar'
+              )}
+            </Button>
           </div>
         </form>
-
-        <div className="pt-2 border-t text-xs text-gray-400">
-          <p>💡 <strong>Dica:</strong> O localizador é o código de 5-8 caracteres fornecido pela companhia aérea no momento da compra.</p>
-        </div>
       </DialogContent>
     </Dialog>
   );

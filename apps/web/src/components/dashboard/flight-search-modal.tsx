@@ -44,9 +44,17 @@ interface FlightSearchModalProps {
 
 export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightSearchModalProps) {
   const [flightNumber, setFlightNumber] = useState('');
+  const [localizador, setLocalizador] = useState('');
+  const [ultimoNome, setUltimoNome] = useState('');
+  const [origem, setOrigem] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [flightInfo, setFlightInfo] = useState<FlightData | null>(null);
+
+  const isGol = (flightNum: string): boolean => {
+    const code = flightNum.substring(0, 2).toUpperCase();
+    return code === 'G3';
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +62,22 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
     if (!flightNumber.trim() || flightNumber.length < 4) {
       setError('Por favor, digite um número de vôo válido (mínimo 4 caracteres)');
       return;
+    }
+
+    // Validação específica para GOL
+    if (isGol(flightNumber)) {
+      if (!localizador.trim()) {
+        setError('Para voos GOL, o Localizador é obrigatório');
+        return;
+      }
+      if (!ultimoNome.trim()) {
+        setError('Para voos GOL, o Último Nome é obrigatório');
+        return;
+      }
+      if (!origem.trim()) {
+        setError('Para voos GOL, a Origem é obrigatória');
+        return;
+      }
     }
 
     setLoading(true);
@@ -64,12 +88,21 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
       console.log('🔍 Buscando vôo real:', flightNumber);
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const searchData: any = {
+        flightNumber: flightNumber.trim().toUpperCase()
+      };
+
+      // Adiciona campos extras se preenchidos
+      if (localizador.trim()) searchData.localizador = localizador.trim().toUpperCase();
+      if (ultimoNome.trim()) searchData.ultimoNome = ultimoNome.trim().toUpperCase();
+      if (origem.trim()) searchData.origem = origem.trim().toUpperCase();
+
       const response = await fetch(`${apiUrl}/api/v1/flight-search/search`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ flightNumber: flightNumber.trim().toUpperCase() }),
+        body: JSON.stringify(searchData),
       });
 
       const result = await response.json();
@@ -83,6 +116,9 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
         setTimeout(() => {
           onOpenChange(false);
           setFlightNumber('');
+          setLocalizador('');
+          setUltimoNome('');
+          setOrigem('');
           setFlightInfo(null);
         }, 1500);
       } else {
@@ -152,29 +188,21 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plane className="h-5 w-5 text-blue-600" />
-            Buscar Vôo em Tempo Real
+            Buscar Reserva
           </DialogTitle>
-          <p className="text-sm text-gray-600 mt-2">
-            Digite o número do vôo para buscar informações em tempo real nas APIs de aviação.
-          </p>
         </DialogHeader>
 
         <form onSubmit={handleSearch} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="flightNumber" className="flex items-center gap-2">
-              <span>Número do Vôo</span>
-              {flightNumber.length >= 4 && (
-                <span className="text-xs text-gray-500">
-                  {getAirlineFlag(flightNumber)} {getAirlineFromCode(flightNumber)}
-                </span>
-              )}
+            <Label htmlFor="flightNumber">
+              Número do Vôo {isGol(flightNumber) && <span className="text-red-600">*</span>}
             </Label>
             <div className="relative">
               <Input
                 id="flightNumber"
                 value={flightNumber}
                 onChange={handleFlightNumberChange}
-                placeholder="Ex: LA3789, G31234, AD4567"
+                placeholder="Ex: LA3789, G31234"
                 required
                 minLength={4}
                 maxLength={8}
@@ -185,18 +213,81 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                ) : flightNumber.length >= 4 ? (
-                  <Search className="h-4 w-4 text-green-600" />
                 ) : (
                   <Search className="h-4 w-4 text-gray-400" />
                 )}
               </div>
             </div>
-            <div className="text-xs text-gray-500 flex items-start gap-1">
-              <span>💡</span>
-              <span>O número do vôo geralmente tem 2 letras + 3-5 números (ex: LA3789)</span>
+          </div>
+
+          {/* Campos adicionais - obrigatórios para GOL */}
+          <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="localizador">
+                Localizador {isGol(flightNumber) && <span className="text-red-600">*</span>}
+              </Label>
+              <Input
+                id="localizador"
+                value={localizador}
+                onChange={(e) => {
+                  setLocalizador(e.target.value.toUpperCase());
+                  setError('');
+                }}
+                placeholder="Ex: ABC123"
+                maxLength={6}
+                className="font-mono"
+                disabled={loading}
+                required={isGol(flightNumber)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ultimoNome">
+                Último Nome {isGol(flightNumber) && <span className="text-red-600">*</span>}
+              </Label>
+              <Input
+                id="ultimoNome"
+                value={ultimoNome}
+                onChange={(e) => {
+                  setUltimoNome(e.target.value.toUpperCase());
+                  setError('');
+                }}
+                placeholder="Ex: SILVA"
+                className="font-mono"
+                disabled={loading}
+                required={isGol(flightNumber)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="origem">
+                Origem (IATA) {isGol(flightNumber) && <span className="text-red-600">*</span>}
+              </Label>
+              <Input
+                id="origem"
+                value={origem}
+                onChange={(e) => {
+                  setOrigem(e.target.value.toUpperCase());
+                  setError('');
+                }}
+                placeholder="Ex: GRU, CGH, SDU"
+                maxLength={3}
+                minLength={3}
+                className="font-mono"
+                disabled={loading}
+                required={isGol(flightNumber)}
+              />
             </div>
           </div>
+
+          {/* Alerta para voos GOL */}
+          {isGol(flightNumber) && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                <strong>Voos GOL:</strong> É necessário informar o Localizador, Último Nome e Origem para realizar a busca.
+              </p>
+            </div>
+          )}
 
           {/* Success State */}
           {flightInfo && !error && (
@@ -369,69 +460,48 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
           {/* Error State */}
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-600 flex items-center gap-2">
-                <span>❌</span>
+              <p className="text-sm text-red-600">
                 {error}
-              </p>
-              <p className="text-xs text-red-500 mt-2">
-                Dica: Verifique se o vôo está operando hoje. Alguns vôos só operam em dias específicos.
               </p>
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-4 border-t">
-            <div className="text-xs text-gray-500 flex flex-col gap-1">
-              <span className="font-medium">✈️ Suporta:</span>
-              <span>🇧🇷 GOL • LATAM • Azul</span>
-              <span>🌎 +200 companhias aéreas</span>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                  setFlightNumber('');
-                  setError('');
-                  setFlightInfo(null);
-                }}
-                disabled={loading}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={flightNumber.length < 4 || loading}
-                className="min-w-24"
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Buscando...
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Search className="h-4 w-4" />
-                    Buscar
-                  </div>
-                )}
-              </Button>
-            </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false);
+                setFlightNumber('');
+                setLocalizador('');
+                setUltimoNome('');
+                setOrigem('');
+                setError('');
+                setFlightInfo(null);
+              }}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              disabled={flightNumber.length < 4 || loading}
+              className="min-w-24"
+            >
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Buscando...
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Search className="h-4 w-4" />
+                  Buscar
+                </div>
+              )}
+            </Button>
           </div>
         </form>
-
-        <div className="pt-2 border-t">
-          <div className="text-xs text-gray-400 space-y-1">
-            <div className="flex items-center gap-1">
-              <span>🔍</span>
-              <span>Busca em tempo real via AirLabs e Aviationstack</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span>🌐</span>
-              <span>Dados atualizados a cada 30-60 segundos</span>
-            </div>
-          </div>
-        </div>
       </DialogContent>
     </Dialog>
   );

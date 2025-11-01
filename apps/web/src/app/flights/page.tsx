@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FlightTabs } from '../../components/dashboard/flight-tabs';
 import { FlightTable } from '../../components/dashboard/flight-table';
 import { FlightFilters } from '../../components/dashboard/flight-filters';
@@ -10,11 +10,13 @@ import { FlightMonitor } from '../../components/dashboard/flight-monitor';
 import { BookingSearchModal } from '../../components/dashboard/booking-search-modal';
 import { FlightSearchModal } from '../../components/dashboard/flight-search-modal';
 import { AutoFillFlightForm } from '../../components/dashboard/auto-fill-flight-form';
+import { BookingDetailsView } from '../../components/dashboard/booking-details-view';
 import { Flight, FlightCategoryType } from '@reservasegura/types';
-import { mockFlights } from '../../lib/mock-data';
+import { apiService } from '../../lib/api';
 
-export default function FlightsPage() {
-  const [flights, setFlights] = useState<Flight[]>(mockFlights);
+export default function DashboardPage() {
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<FlightCategoryType>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAirline, setSelectedAirline] = useState<string | null>(null);
@@ -24,7 +26,30 @@ export default function FlightsPage() {
   const [showBookingSearch, setShowBookingSearch] = useState(false);
   const [showFlightSearch, setShowFlightSearch] = useState(false);
   const [showAutoFillForm, setShowAutoFillForm] = useState(false);
+  const [showBookingDetails, setShowBookingDetails] = useState(false);
   const [bookingData, setBookingData] = useState<any>(null);
+  const [fullBookingDetails, setFullBookingDetails] = useState<any>(null);
+
+  // Load flights from database on mount
+  useEffect(() => {
+    loadFlights();
+  }, []);
+
+  const loadFlights = async () => {
+    try {
+      setIsLoading(true);
+      const response = await apiService.getAllFlights({ limit: 100 });
+
+      if (response.success && response.data) {
+        setFlights(response.data);
+      }
+    } catch (error) {
+      console.error('❌ Error loading flights:', error);
+      // Show error toast or message to user
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter flights based on tab, search, and airline
   const filteredFlights = useMemo(() => {
@@ -83,14 +108,34 @@ export default function FlightsPage() {
     flown: flights.filter(f => f.status === 'ARRIVED').length,
   }), [flights]);
 
-  const handleDeleteFlight = (id: string) => {
-    setFlights(prev => prev.filter(f => f.id !== id));
+  const handleDeleteFlight = async (id: string) => {
+    try {
+      const response = await apiService.deleteFlight(id);
+
+      if (response.success) {
+        setFlights(prev => prev.filter(f => f.id !== id));
+        console.log('✅ Flight deleted successfully');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting flight:', error);
+      alert('Failed to delete flight. Please try again.');
+    }
   };
 
-  const handleUpdateFlight = (id: string, updates: Partial<Flight>) => {
-    setFlights(prev => prev.map(f =>
-      f.id === id ? { ...f, ...updates } : f
-    ));
+  const handleUpdateFlight = async (id: string, updates: Partial<Flight>) => {
+    try {
+      const response = await apiService.updateFlight(id, updates);
+
+      if (response.success && response.data) {
+        setFlights(prev => prev.map(f =>
+          f.id === id ? response.data : f
+        ));
+        console.log('✅ Flight updated successfully');
+      }
+    } catch (error) {
+      console.error('❌ Error updating flight:', error);
+      alert('Failed to update flight. Please try again.');
+    }
   };
 
   const handleAddFlight = () => {
@@ -112,7 +157,9 @@ export default function FlightsPage() {
   };
 
   const handleFlightSearchFound = (flightData: any) => {
-    console.log('✈️ Vôo encontrado, abrindo formulário:', flightData);
+    console.log('✈️ Vôo encontrado, abrindo formulário editável:', flightData);
+
+    // Passar dados para o formulário EDITÁVEL (AutoFillFlightForm)
     setBookingData(flightData);
     setShowAutoFillForm(true);
   };
@@ -129,21 +176,32 @@ export default function FlightsPage() {
     setShowAutoFillForm(true);
   };
 
-  const handleSubmitFlight = (flightData: Omit<Flight, 'id'>) => {
-    if (editingFlight) {
-      // Edit existing flight
-      setFlights(prev => prev.map(f =>
-        f.id === editingFlight.id
-          ? { ...flightData, id: editingFlight.id }
-          : f
-      ));
-    } else {
-      // Add new flight
-      const newFlight: Flight = {
-        ...flightData,
-        id: Date.now().toString(), // Simple ID generation
-      };
-      setFlights(prev => [...prev, newFlight]);
+  const handleSubmitFlight = async (flightData: Omit<Flight, 'id'>) => {
+    try {
+      if (editingFlight) {
+        // Edit existing flight
+        const response = await apiService.updateFlight(editingFlight.id, flightData);
+
+        if (response.success && response.data) {
+          setFlights(prev => prev.map(f =>
+            f.id === editingFlight.id ? response.data : f
+          ));
+          console.log('✅ Flight updated successfully');
+        }
+      } else {
+        // Add new flight
+        const response = await apiService.createFlight(flightData);
+
+        if (response.success && response.data) {
+          setFlights(prev => [response.data, ...prev]);
+          console.log('✅ Flight created successfully');
+        }
+      }
+      setIsModalOpen(false);
+      setShowAutoFillForm(false);
+    } catch (error) {
+      console.error('❌ Error saving flight:', error);
+      alert('Failed to save flight. Please try again.');
     }
   };
 
@@ -172,13 +230,21 @@ export default function FlightsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 shadow-xl">
+            <div className="flex items-center gap-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              <p className="text-lg">Carregando voos...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border-b">
         <div className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center mb-4">
-            <div>
-              <h1 className="text-2xl font-bold">Gestão de Voos</h1>
-              <p className="text-muted-foreground">Gerencie e monitore todos os voos</p>
-            </div>
+            <h1 className="text-2xl font-bold">Gestão de Voos</h1>
             <div className="flex gap-2">
               <button
                 onClick={handleSearchFlight}
@@ -203,7 +269,7 @@ export default function FlightsPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-6 py-6 space-y-6">
+      <div className="container mx-auto px-6 space-y-6">
         {showMonitor && (
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold mb-4">Monitoramento de Voos Online</h2>
@@ -253,6 +319,12 @@ export default function FlightsPage() {
         onSubmit={handleSubmitFlight}
         bookingData={bookingData}
         flight={editingFlight}
+      />
+
+      <BookingDetailsView
+        open={showBookingDetails}
+        onOpenChange={setShowBookingDetails}
+        booking={fullBookingDetails}
       />
 
       <FloatingActionButton onClick={handleAddFlight} />
