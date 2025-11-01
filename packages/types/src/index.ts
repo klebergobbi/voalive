@@ -27,6 +27,28 @@ export const FlightSchema = z.object({
   locator: z.string().optional(),
   passengerFirstName: z.string().optional(),
   passengerLastName: z.string().optional(),
+
+  // Campos de monitoramento em tempo real
+  realDepartureTime: z.date().optional(),
+  estimatedDepartureTime: z.date().optional(),
+  realArrivalTime: z.date().optional(),
+  estimatedArrivalTime: z.date().optional(),
+  departureGate: z.string().optional(),
+  departureTerminal: z.string().optional(),
+  arrivalGate: z.string().optional(),
+  arrivalTerminal: z.string().optional(),
+  delayMinutes: z.number().optional(),
+
+  // Posição GPS em tempo real
+  currentLatitude: z.number().optional(),
+  currentLongitude: z.number().optional(),
+  currentAltitude: z.number().optional(),
+  currentSpeed: z.number().optional(),
+  currentHeading: z.number().optional(),
+
+  // Metadados
+  trackingEnabled: z.boolean().optional(),
+  lastTrackedAt: z.date().optional(),
 });
 
 export const BookingSchema = z.object({

@@ -8,71 +8,97 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  password      String
-  role          String    @default("USER")
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  role      String   @default("USER")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  bookings      Booking[]
-  transactions  Transaction[]
+  bookings          Booking[]
+  transactions      Transaction[]
+  connectedAccounts ConnectedAirlineAccount[]
+  bookingMonitors   BookingMonitor[]
+  notifications     Notification[]
 }
 
 model Flight {
-  id              String    @id @default(cuid())
-  flightNumber    String    @unique
-  origin          String
-  destination     String
-  departureTime   DateTime
-  arrivalTime     DateTime
-  airline         String
-  aircraft        String
-  availableSeats  Int
-  totalSeats      Int
-  basePrice       Float
-  status          String @default("SCHEDULED")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String   @id @default(cuid())
+  flightNumber   String   @unique
+  origin         String
+  destination    String
+  departureTime  DateTime
+  arrivalTime    DateTime
+  airline        String
+  aircraft       String
+  availableSeats Int
+  totalSeats     Int
+  basePrice      Float
+  status         String   @default("SCHEDULED")
 
-  bookings        Booking[]
+  // Campos de monitoramento em tempo real
+  realDepartureTime      DateTime?
+  estimatedDepartureTime DateTime?
+  realArrivalTime        DateTime?
+  estimatedArrivalTime   DateTime?
+  departureGate          String?
+  departureTerminal      String?
+  arrivalGate            String?
+  arrivalTerminal        String?
+  delayMinutes           Int?
+
+  // Posição GPS em tempo real
+  currentLatitude  Float?
+  currentLongitude Float?
+  currentAltitude  Int?
+  currentSpeed     Int?
+  currentHeading   Int?
+
+  // Metadados
+  trackingEnabled Boolean   @default(false)
+  lastTrackedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings Booking[]
 }
 
 model Booking {
-  id              String    @id @default(cuid())
-  user            User      @relation(fields: [userId], references: [id])
-  userId          String
-  flight          Flight    @relation(fields: [flightId], references: [id])
-  flightId        String
-  bookingCode     String    @unique
-  passengers      String // JSON string
-  totalAmount     Float
-  status          String @default("PENDING")
-  paymentStatus   String @default("PENDING")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  flight        Flight   @relation(fields: [flightId], references: [id])
+  flightId      String
+  bookingCode   String   @unique
+  passengers    String // JSON string
+  totalAmount   Float
+  status        String   @default("PENDING")
+  paymentStatus String   @default("PENDING")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  transaction     Transaction?
+  transaction Transaction?
 
   @@index([userId])
   @@index([flightId])
 }
 
 model Transaction {
-  id              String    @id @default(cuid())
-  booking         Booking   @relation(fields: [bookingId], references: [id])
-  bookingId       String    @unique
-  user            User      @relation(fields: [userId], references: [id])
-  userId          String
-  amount          Float
-  paymentMethod   String
-  transactionId   String    @unique
-  status          String @default("PENDING")
-  metadata        String? // JSON string
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  booking       Booking  @relation(fields: [bookingId], references: [id])
+  bookingId     String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  amount        Float
+  paymentMethod String
+  transactionId String   @unique
+  status        String   @default("PENDING")
+  metadata      String? // JSON string
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
 }
@@ -87,24 +113,24 @@ model Transaction {
 // JobStatus: PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
 
 model ScrapedFlight {
-  id              String    @id @default(cuid())
-  externalId      String    @unique
-  flightNumber    String
-  origin          String
-  destination     String
-  departureTime   DateTime
-  arrivalTime     DateTime?
-  airline         String
-  aircraft        String?
-  status          String
-  gate            String?
-  terminal        String?
-  delay           Int?      // minutes
-  source          String // FLIGHTRADAR24 or FLIGHTAWARE
-  lastUpdated     DateTime
-  rawData         String?   // JSON string - store original scraped data
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  externalId    String    @unique
+  flightNumber  String
+  origin        String
+  destination   String
+  departureTime DateTime
+  arrivalTime   DateTime?
+  airline       String
+  aircraft      String?
+  status        String
+  gate          String?
+  terminal      String?
+  delay         Int? // minutes
+  source        String // FLIGHTRADAR24 or FLIGHTAWARE
+  lastUpdated   DateTime
+  rawData       String? // JSON string - store original scraped data
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([flightNumber])
   @@index([source])
@@ -113,37 +139,182 @@ model ScrapedFlight {
 }
 
 model ScrapingJob {
-  id            String    @id @default(cuid())
-  source        String
-  jobType       String    // 'flight_data', 'airport_data', etc
-  parameters    String?   // JSON string - search parameters, urls, etc
-  status        String @default("PENDING")
-  startedAt     DateTime?
-  completedAt   DateTime?
-  recordsCount  Int       @default(0)
-  errorMessage  String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  source       String
+  jobType      String // 'flight_data', 'airport_data', etc
+  parameters   String? // JSON string - search parameters, urls, etc
+  status       String    @default("PENDING")
+  startedAt    DateTime?
+  completedAt  DateTime?
+  recordsCount Int       @default(0)
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@index([source, status])
   @@index([createdAt])
 }
 
 model Airport {
-  id              String    @id @default(cuid())
-  iataCode        String    @unique
-  icaoCode        String    @unique
-  name            String
-  city            String
-  country         String
-  timezone        String
-  coordinates     String?   // JSON string - lat, lng
-  lastUpdated     DateTime
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id          String   @id @default(cuid())
+  iataCode    String   @unique
+  icaoCode    String   @unique
+  name        String
+  city        String
+  country     String
+  timezone    String
+  coordinates String? // JSON string - lat, lng
+  lastUpdated DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([iataCode])
   @@index([icaoCode])
   @@index([city, country])
 }
 
+// ========================================
+// SISTEMA DE MONITORAMENTO DE RESERVAS
+// ========================================
+
+model ConnectedAirlineAccount {
+  id                String @id @default(cuid())
+  user              User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  airline           String
+  accountEmail      String
+  encryptedPassword String
+
+  sessionCookies   String?
+  sessionToken     String?
+  sessionExpiresAt DateTime?
+  lastLoginAt      DateTime?
+  loginAttempts    Int       @default(0)
+
+  isActive     Boolean   @default(true)
+  lastSyncAt   DateTime?
+  syncInterval Int       @default(15)
+
+  autoMonitor   Boolean @default(true)
+  notifyChanges Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  monitors BookingMonitor[]
+
+  @@unique([userId, airline])
+  @@index([userId])
+  @@index([airline])
+}
+
+model BookingMonitor {
+  id        String                  @id @default(cuid())
+  account   ConnectedAirlineAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId String
+  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  bookingCode   String
+  airline       String
+  passengerName String
+
+  currentFlightNumber  String
+  currentOrigin        String
+  currentDestination   String
+  currentDepartureTime DateTime
+  currentArrivalTime   DateTime?
+  currentSeat          String?
+  currentClass         String?
+  currentGate          String?
+  currentTerminal      String?
+  currentStatus        String    @default("ACTIVE")
+
+  monitoringEnabled Boolean   @default(true)
+  lastCheckedAt     DateTime?
+  nextCheckAt       DateTime?
+  checkInterval     Int       @default(15)
+  checksCount       Int       @default(0)
+
+  hasChanges           Boolean   @default(false)
+  lastChangeDetectedAt DateTime?
+  changesNotified      Boolean   @default(false)
+
+  rawData String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  changes       BookingChange[]
+  notifications Notification[]
+
+  @@unique([accountId, bookingCode])
+  @@index([userId])
+  @@index([bookingCode])
+  @@index([airline])
+  @@index([monitoringEnabled, nextCheckAt])
+}
+
+model BookingChange {
+  id        String         @id @default(cuid())
+  monitor   BookingMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitorId String
+
+  changeType String
+
+  oldValue String?
+  newValue String?
+
+  oldFlightNumber  String?
+  newFlightNumber  String?
+  oldDepartureTime DateTime?
+  newDepartureTime DateTime?
+  oldSeat          String?
+  newSeat          String?
+  oldGate          String?
+  newGate          String?
+
+  detectedAt DateTime  @default(now())
+  notified   Boolean   @default(false)
+  notifiedAt DateTime?
+  severity   String    @default("INFO")
+
+  rawDataBefore String?
+  rawDataAfter  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([monitorId])
+  @@index([changeType])
+  @@index([detectedAt])
+}
+
+model Notification {
+  id        String          @id @default(cuid())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  monitor   BookingMonitor? @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitorId String?
+
+  type    String
+  title   String
+  message String
+  data    String?
+
+  sendEmail Boolean @default(true)
+  sendPush  Boolean @default(true)
+  sendSMS   Boolean @default(false)
+
+  status String    @default("PENDING")
+  sentAt DateTime?
+  readAt DateTime?
+
+  priority String @default("NORMAL")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
