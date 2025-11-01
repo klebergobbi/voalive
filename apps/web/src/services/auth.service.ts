@@ -60,7 +60,7 @@ class AuthService {
   }
 
   async register(data: RegisterData): Promise<AuthResponse> {
-    const response = await fetch(`${API_URL}/api/v1/auth/register`, {
+    const response = await fetch(`${API_URL}/api/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -70,21 +70,29 @@ class AuthService {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Erro ao registrar');
+      throw new Error(error.error || error.message || 'Erro ao registrar');
     }
 
     const result = await response.json();
-    this.setTokens(result.token, result.refreshToken);
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('user', JSON.stringify(result.user));
+    if (result.success && result.data) {
+      const token = result.data.token;
+      // Store only single token (no refreshToken in our implementation)
+      this.setTokens(token, ''); // Pass empty string for refreshToken
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(result.data.user));
+        localStorage.setItem('auth_token', token);
+      }
+
+      return { ...result.data, refreshToken: '' };
     }
 
-    return result;
+    throw new Error('Registration failed');
   }
 
   async login(data: LoginData): Promise<AuthResponse> {
-    const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+    const response = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -94,30 +102,40 @@ class AuthService {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Erro ao fazer login');
+      throw new Error(error.error || error.message || 'Erro ao fazer login');
     }
 
     const result = await response.json();
-    this.setTokens(result.token, result.refreshToken);
 
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('user', JSON.stringify(result.user));
+    if (result.success && result.data) {
+      const token = result.data.token;
+      this.setTokens(token, '');
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(result.data.user));
+        localStorage.setItem('auth_token', token);
+      }
+
+      return { ...result.data, refreshToken: '' };
     }
 
-    return result;
+    throw new Error('Login failed');
   }
 
   async logout(): Promise<void> {
     try {
       const token = this.getToken();
       if (token) {
-        await fetch(`${API_URL}/api/v1/auth/logout`, {
+        await fetch(`${API_URL}/api/auth/logout`, {
           method: 'POST',
           headers: this.getAuthHeaders(),
         });
       }
     } finally {
       this.clearTokens();
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('auth_token');
+      }
     }
   }
 
@@ -150,7 +168,7 @@ class AuthService {
   async getCurrentUser(): Promise<User | null> {
     if (typeof window === 'undefined') return null;
 
-    const token = this.getToken();
+    const token = this.getToken() || localStorage.getItem('auth_token');
     if (!token) return null;
 
     try {
@@ -159,7 +177,7 @@ class AuthService {
         return JSON.parse(userStr);
       }
 
-      const response = await fetch(`${API_URL}/api/v1/auth/me`, {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: this.getAuthHeaders(),
       });
 
@@ -168,9 +186,14 @@ class AuthService {
         return null;
       }
 
-      const user = await response.json();
-      localStorage.setItem('user', JSON.stringify(user));
-      return user;
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        localStorage.setItem('user', JSON.stringify(result.data));
+        return result.data;
+      }
+
+      return null;
     } catch (error) {
       this.clearTokens();
       return null;
