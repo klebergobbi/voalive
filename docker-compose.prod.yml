@@ -52,6 +52,10 @@ services:
       AUTO_START_SCRAPER: "true"
       JWT_SECRET: reservasegura_jwt_secret_prod_2024_ultra_secure
       LOG_LEVEL: info
+      # Playwright configuration
+      PLAYWRIGHT_BROWSERS_PATH: /home/apiuser/.cache/ms-playwright
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+      PLAYWRIGHT_HEADLESS: "true"
     depends_on:
       postgres:
         condition: service_healthy
