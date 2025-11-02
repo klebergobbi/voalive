@@ -136,7 +136,7 @@ export default function DashboardPage() {
   const loadNotifications = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/booking-monitor/notifications`, {
+      const response = await fetch(`${apiUrl}/api/v2/booking-monitor/notifications`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const result = await response.json();
@@ -151,7 +151,7 @@ export default function DashboardPage() {
   const loadChanges = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/booking-monitor/changes`, {
+      const response = await fetch(`${apiUrl}/api/v2/booking-monitor/changes`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const result = await response.json();
@@ -166,7 +166,7 @@ export default function DashboardPage() {
   const loadAccounts = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/booking-monitor/accounts`, {
+      const response = await fetch(`${apiUrl}/api/v2/booking-monitor/accounts`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
       const result = await response.json();
@@ -181,7 +181,7 @@ export default function DashboardPage() {
   const handleConnectAccount = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/booking-monitor/connect-account`, {
+      const response = await fetch(`${apiUrl}/api/v2/booking-monitor/connect-account`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

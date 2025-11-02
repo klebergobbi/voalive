@@ -438,7 +438,7 @@ export class FlightScraperService {
           source: source,
           jobType: jobType,
           status: JobStatus.PENDING,
-          targetAirports: airports,
+          parameters: JSON.stringify({ targetAirports: airports }),
           recordsCount: 0,
           createdAt: new Date()
         }

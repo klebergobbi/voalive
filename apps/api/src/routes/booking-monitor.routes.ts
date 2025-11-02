@@ -148,7 +148,13 @@ router.get('/accounts', async (req, res) => {
 
     res.json({
       success: true,
-      data: accounts
+      data: accounts.map(acc => ({
+        id: acc.id,
+        airline: acc.airline,
+        email: acc.accountEmail,
+        isActive: acc.isActive,
+        lastSyncAt: acc.lastSyncAt
+      }))
     });
   } catch (error: any) {
     console.error('Erro ao listar contas:', error);
@@ -209,8 +215,86 @@ router.get('/bookings', async (req, res) => {
 });
 
 /**
+ * GET /api/booking-monitor/notifications
+ * Lista notificações do usuário
+ */
+router.get('/notifications', async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { PrismaClient } = await import('@reservasegura/database');
+    const prisma = new PrismaClient();
+
+    const notifications = await prisma.bookingNotification.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50
+    });
+
+    res.json({
+      success: true,
+      data: notifications
+    });
+  } catch (error: any) {
+    console.error('Erro ao listar notificações:', error);
+    res.status(500).json({
+      success: false,
+      data: [],
+      error: error.message || 'Erro ao listar notificações'
+    });
+  }
+});
+
+/**
+ * GET /api/booking-monitor/changes
+ * Lista todas as mudanças de reservas do usuário
+ */
+router.get('/changes', async (req, res) => {
+  try {
+    const userId = (req as any).user.id;
+    const { PrismaClient } = await import('@reservasegura/database');
+    const prisma = new PrismaClient();
+
+    const changes = await prisma.bookingChange.findMany({
+      where: {
+        monitor: { userId }
+      },
+      include: {
+        monitor: {
+          select: {
+            bookingCode: true,
+            passengerName: true
+          }
+        }
+      },
+      orderBy: { detectedAt: 'desc' },
+      take: 100
+    });
+
+    res.json({
+      success: true,
+      data: changes.map(c => ({
+        id: c.id,
+        bookingCode: c.monitor.bookingCode,
+        passengerName: c.monitor.passengerName,
+        changeType: c.changeType,
+        oldValue: c.oldValue,
+        newValue: c.newValue,
+        detectedAt: c.detectedAt
+      }))
+    });
+  } catch (error: any) {
+    console.error('Erro ao listar mudanças:', error);
+    res.status(500).json({
+      success: false,
+      data: [],
+      error: error.message || 'Erro ao listar mudanças'
+    });
+  }
+});
+
+/**
  * GET /api/booking-monitor/changes/:monitorId
- * Lista mudanças de uma reserva
+ * Lista mudanças de uma reserva específica
  */
 router.get('/changes/:monitorId', async (req, res) => {
   try {

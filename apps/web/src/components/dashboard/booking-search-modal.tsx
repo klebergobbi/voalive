@@ -195,7 +195,7 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
       });
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/v1/airline-booking/search-booking`, {
+      const response = await fetch(`${apiUrl}/api/v2/external-booking/search`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,19 +210,112 @@ export function BookingSearchModal({ open, onOpenChange, onBookingFound }: Booki
       const result = await response.json();
 
       if (result.success && result.data) {
-        console.log('✅ Reserva encontrada:', result.data);
-        onBookingFound(result.data);
+        console.log('✅ Reserva encontrada no banco local:', result.data);
+
+        // Converter formato da API v2 para o formato esperado pelo componente
+        const bookingData: BookingData = {
+          localizador: result.data.bookingCode,
+          sobrenome: result.data.lastName,
+          passageiro: result.data.passengerName || result.data.fullName,
+          numeroVoo: result.data.flightNumber,
+          origem: result.data.origin,
+          destino: result.data.destination,
+          dataPartida: result.data.departureDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+          dataChegada: result.data.arrivalDate?.split('T')[0] || result.data.departureDate?.split('T')[0] || new Date().toISOString().split('T')[0],
+          horarioPartida: result.data.departureDate?.split('T')[1]?.substring(0, 5) || '',
+          horarioChegada: result.data.arrivalDate?.split('T')[1]?.substring(0, 5) || '',
+          companhia: (result.data.airline?.toUpperCase().includes('GOL') ? 'GOL' :
+                     result.data.airline?.toUpperCase().includes('LATAM') ? 'LATAM' :
+                     result.data.airline?.toUpperCase().includes('AZUL') ? 'AZUL' : 'GOL') as any,
+          status: result.data.status || result.data.bookingStatus || 'CONFIRMED',
+          portaoEmbarque: result.data.gate,
+          terminal: result.data.terminal,
+          assento: result.data.seat,
+          classe: result.data.class || 'ECONOMICA'
+        };
+
+        onBookingFound(bookingData);
         onOpenChange(false);
         setNumeroVoo('');
         setLocalizador('');
         setUltimoNome('');
         setOrigem('');
       } else {
-        setError(result.message || result.error || 'Reserva não encontrada. Verifique os dados e tente novamente.');
+        // Reserva NÃO encontrada no banco local
+        // Vamos buscar nas APIs externas de companhias aéreas
+        console.log('❌ Reserva não encontrada no banco local. Buscando nas APIs externas...');
 
-        // Mostrar instruções se disponíveis
-        if (result.instructions && result.instructions.length > 0) {
-          console.log('💡 Instruções:', result.instructions);
+        try {
+          // Tentar buscar na API antiga (companhias aéreas)
+          const airlineResponse = await fetch(`${apiUrl}/api/v1/airline-booking/search-booking`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              localizador: localizador.trim().toUpperCase(),
+              sobrenome: ultimoNome.trim().toUpperCase() || '',
+              origem: origem.trim().toUpperCase() || ''
+            }),
+          });
+
+          const airlineResult = await airlineResponse.json();
+
+          if (airlineResult.success && airlineResult.data) {
+            console.log('✅ Reserva encontrada na API externa:', airlineResult.data);
+
+            // AUTO-CADASTRAR a reserva encontrada na API externa
+            console.log('💾 AUTO-CADASTRANDO reserva no banco local...');
+
+            const registerPayload = {
+              bookingCode: airlineResult.data.localizador || localizador.trim().toUpperCase(),
+              lastName: airlineResult.data.sobrenome || ultimoNome.trim().toUpperCase(),
+              firstName: airlineResult.data.passageiro?.split(' ')[0] || '',
+              fullName: airlineResult.data.passageiro || `${ultimoNome.trim().toUpperCase()}`,
+              airline: airlineResult.data.companhia || 'GOL',
+              flightNumber: airlineResult.data.numeroVoo || '',
+              origin: airlineResult.data.origem || origem.trim().toUpperCase(),
+              destination: airlineResult.data.destino || '',
+              departureDate: airlineResult.data.dataPartida ? new Date(airlineResult.data.dataPartida).toISOString() : new Date().toISOString(),
+              arrivalDate: airlineResult.data.dataChegada ? new Date(airlineResult.data.dataChegada).toISOString() : undefined,
+              seat: airlineResult.data.assento,
+              class: airlineResult.data.classe || 'ECONOMICA',
+              gate: airlineResult.data.portaoEmbarque,
+              terminal: airlineResult.data.terminal,
+              checkInStatus: 'PENDING',
+              bookingStatus: airlineResult.data.status || 'CONFIRMED',
+              source: 'AIRLINE_API'
+            };
+
+            // Cadastrar automaticamente
+            await fetch(`${apiUrl}/api/v2/external-booking/register`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(registerPayload),
+            });
+
+            console.log('✅ Reserva AUTO-CADASTRADA com sucesso!');
+
+            // Passar dados para o componente pai
+            onBookingFound(airlineResult.data);
+            onOpenChange(false);
+            setNumeroVoo('');
+            setLocalizador('');
+            setUltimoNome('');
+            setOrigem('');
+          } else {
+            setError(result.message || result.error || 'Reserva não encontrada. Verifique os dados e tente novamente.');
+
+            // Mostrar instruções se disponíveis
+            if (result.instructions && result.instructions.length > 0) {
+              console.log('💡 Instruções:', result.instructions);
+            }
+          }
+        } catch (externalError) {
+          console.error('❌ Erro ao buscar na API externa:', externalError);
+          setError(result.message || result.error || 'Reserva não encontrada.');
         }
       }
     } catch (error) {
