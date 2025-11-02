@@ -85,6 +85,12 @@ export default function DashboardPage() {
   const [selectedAirline, setSelectedAirline] = useState<string>('');
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<ExternalBooking | null>(null);
+  const [showConnectAccountModal, setShowConnectAccountModal] = useState(false);
+  const [newAccount, setNewAccount] = useState({
+    airline: 'GOL',
+    email: '',
+    password: ''
+  });
 
   // Carregar dados
   useEffect(() => {
@@ -169,6 +175,34 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error('Erro ao carregar contas:', error);
+    }
+  };
+
+  const handleConnectAccount = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/booking-monitor/connect-account`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(newAccount)
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('✅ Conta conectada com sucesso!');
+        setShowConnectAccountModal(false);
+        setNewAccount({ airline: 'GOL', email: '', password: '' });
+        await loadAccounts();
+      } else {
+        alert(`❌ Erro: ${result.error || 'Não foi possível conectar a conta'}`);
+      }
+    } catch (error) {
+      console.error('Erro ao conectar conta:', error);
+      alert('❌ Erro ao conectar conta');
     }
   };
 
@@ -507,7 +541,10 @@ export default function DashboardPage() {
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-lg font-bold">🔗 Gerenciar Contas de Companhias</h3>
-        <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2">
+        <button
+          onClick={() => setShowConnectAccountModal(true)}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
+        >
           <Plus className="w-4 h-4" />
           Conectar Nova Conta
         </button>
@@ -851,6 +888,78 @@ export default function DashboardPage() {
       <div className="container mx-auto px-6 py-6">
         {renderModuleContent()}
       </div>
+
+      {/* Modal: Conectar Conta de Companhia */}
+      {showConnectAccountModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h3 className="text-xl font-bold">🔗 Conectar Conta de Companhia</h3>
+              <button
+                onClick={() => setShowConnectAccountModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Companhia Aérea</label>
+                <select
+                  value={newAccount.airline}
+                  onChange={(e) => setNewAccount({ ...newAccount, airline: e.target.value })}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="GOL">GOL Linhas Aéreas</option>
+                  <option value="LATAM">LATAM Airlines</option>
+                  <option value="AZUL">Azul Linhas Aéreas</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Email / CPF</label>
+                <input
+                  type="text"
+                  value={newAccount.email}
+                  onChange={(e) => setNewAccount({ ...newAccount, email: e.target.value })}
+                  placeholder="Digite seu email ou CPF"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Senha</label>
+                <input
+                  type="password"
+                  value={newAccount.password}
+                  onChange={(e) => setNewAccount({ ...newAccount, password: e.target.value })}
+                  placeholder="Digite sua senha"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Segurança:</strong> Suas credenciais serão armazenadas de forma criptografada
+                  e usadas apenas para monitorar suas reservas automaticamente.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <button
+                onClick={() => setShowConnectAccountModal(false)}
+                className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConnectAccount}
+                disabled={!newAccount.email || !newAccount.password}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Conectar Conta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Botão Flutuante */}
       <button className="fixed bottom-8 right-8 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110">
