@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -317,4 +317,69 @@ model Notification {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+// ========================================
+// RESERVAS EXTERNAS (Modelo CVC)
+// ========================================
+// Armazena reservas importadas/cadastradas manualmente
+// Permite busca por localizador + sobrenome (como CVC)
+
+model ExternalBooking {
+  id                String    @id @default(cuid())
+
+  // Identificação da reserva
+  bookingCode       String    // Código localizador (PNR)
+  lastName          String    // Sobrenome do passageiro principal
+  firstName         String?   // Primeiro nome
+  fullName          String    // Nome completo do passageiro
+
+  // Dados do voo
+  airline           String    // Companhia aérea (GOL, LATAM, AZUL, etc)
+  flightNumber      String    // Número do voo (ex: G31234)
+  origin            String    // Origem (código IATA)
+  destination       String    // Destino (código IATA)
+  departureDate     DateTime  // Data/hora de partida
+  arrivalDate       DateTime? // Data/hora de chegada
+
+  // Informações da reserva
+  seat              String?   // Assento
+  class             String?   // Classe (Econômica, Executiva)
+  gate              String?   // Portão de embarque
+  terminal          String?   // Terminal
+  checkInStatus     String    @default("PENDING") // PENDING, CHECKED_IN, BOARDED
+  bookingStatus     String    @default("CONFIRMED") // CONFIRMED, CANCELLED, COMPLETED
+
+  // Dados adicionais
+  email             String?   // Email do passageiro
+  phone             String?   // Telefone
+  document          String?   // CPF/Passaporte
+
+  // Metadados
+  source            String    @default("MANUAL") // MANUAL, CVC, MAX_MILHAS, etc
+  externalId        String?   // ID externo da plataforma de origem
+  purchaseDate      DateTime? // Data da compra
+  totalAmount       Float?    // Valor total
+
+  // Campos para atualização automática
+  lastUpdated       DateTime  @default(now())
+  lastChecked       DateTime? // Última verificação automática
+  autoUpdate        Boolean   @default(false) // Habilitar atualização automática
+
+  // Dados brutos (JSON)
+  rawData           String?   // Dados originais em JSON
+
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Índices para busca eficiente
+  @@index([bookingCode, lastName])
+  @@index([bookingCode])
+  @@index([lastName])
+  @@index([flightNumber])
+  @@index([airline])
+  @@index([origin, destination])
+  @@index([departureDate])
+  @@unique([bookingCode, lastName, airline])
 }

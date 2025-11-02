@@ -8,6 +8,8 @@ import http from 'http';
 import cors from 'cors';
 import helmet from 'helmet';
 import 'express-async-errors';
+import Redis from 'ioredis';
+import Queue from 'bull';
 import { flightScraperRoutes } from './routes/flight-scraper.routes';
 import airlineBookingRoutes from './routes/airline-booking.routes';
 import flightSearchRoutes from './routes/flight-search.routes';
@@ -16,10 +18,17 @@ import { authRoutes } from './routes/auth.routes';
 import { bookingRoutes } from './routes/booking.routes';
 import { transactionRoutes } from './routes/transaction.routes';
 import bookingMonitorRoutes from './routes/booking-monitor.routes';
+import externalBookingRoutes from './routes/external-booking.routes';
 import { getFlightScraperService } from './services/flight-scraper.service';
 import { metricsMiddleware, prometheusMetricsHandler, jsonMetricsHandler } from './middlewares/metrics.middleware';
 import { getHealthMonitorService } from './services/health-monitor.service';
 import { getBookingMonitorService } from './services/booking-monitor.service';
+
+// Flight Monitoring (NEW)
+import flightsRoutes from './routes/flights.routes';
+import flightMonitoringCacheRoutes from './routes/flight-monitoring-cache-routes';
+import { getFlightMonitoringService } from './services/flightMonitoring';
+import { initializeFlightWebSocket } from './websockets/flightWebSocket';
 
 const app = express();
 const server = http.createServer(app);
@@ -83,7 +92,76 @@ app.use('/api/v1/flight-scraper', flightScraperRoutes);
 app.use('/api/v1/airline-booking', airlineBookingRoutes);
 app.use('/api/v1/flight-search', flightSearchRoutes);
 app.use('/api/v2/booking-monitor', bookingMonitorRoutes);
+app.use('/api/v2/external-booking', externalBookingRoutes);
 console.log('✅ Sistema de monitoramento avançado de reservas carregado');
+console.log('✅ Sistema de reservas externas (Modelo CVC) carregado');
+
+// ============================================================================
+// FLIGHT MONITORING SYSTEM (NEW)
+// ============================================================================
+try {
+  console.log('🚀 Initializing Flight Monitoring System...');
+
+  // Initialize Redis
+  const redis = new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD,
+    retryStrategy: (times) => {
+      const delay = Math.min(times * 50, 2000);
+      return delay;
+    },
+  });
+
+  redis.on('connect', () => {
+    console.log('✅ Redis connected for Flight Monitoring');
+  });
+
+  redis.on('error', (err) => {
+    console.error('❌ Redis connection error:', err.message);
+  });
+
+  // Initialize Bull Queue
+  const monitoringQueue = new Queue('flight-monitoring', {
+    redis: {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
+    },
+  });
+
+  // Initialize FlightMonitoringService
+  getFlightMonitoringService(redis, monitoringQueue, {
+    cacheConfig: {
+      ttl: 900, // 15 minutes
+      rateLimitMax: 10,
+      rateLimitWindow: 60,
+    },
+  });
+
+  console.log('✅ FlightMonitoringService initialized');
+
+  // Initialize WebSocket
+  initializeFlightWebSocket(server);
+  console.log('✅ Flight WebSocket initialized at /ws/flights');
+
+  // Register routes (usando /api/v2/flights para evitar conflito)
+  app.use('/api/v2/flights', flightsRoutes);
+  app.use('/api/v2/flight-monitoring', flightMonitoringCacheRoutes);
+
+  console.log('✅ Flight Monitoring routes registered:');
+  console.log('   GET    /api/v2/flights/status');
+  console.log('   POST   /api/v2/flights/monitor');
+  console.log('   GET    /api/v2/flights/monitor');
+  console.log('   GET    /api/v2/flights/monitor/:id');
+  console.log('   DELETE /api/v2/flights/monitor/:id');
+  console.log('   GET    /api/v2/flight-monitoring/history/:booking/:name');
+  console.log('   GET    /api/v2/flight-monitoring/cache/stats');
+  console.log('   WS     /ws/flights');
+
+} catch (error) {
+  console.error('❌ Failed to initialize Flight Monitoring System:', error);
+}
 
 // ✨ MÓDULO DE MONITORAMENTO DE RESERVAS EM TEMPO REAL
 try {
