@@ -1,61 +1,181 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { FlightTabs } from '../../components/dashboard/flight-tabs';
-import { FlightTable } from '../../components/dashboard/flight-table';
-import { FlightFilters } from '../../components/dashboard/flight-filters';
-import { FloatingActionButton } from '../../components/dashboard/floating-action-button';
-import { FlightFormModal } from '../../components/dashboard/flight-form-modal';
-import { FlightMonitor } from '../../components/dashboard/flight-monitor';
-import { BookingSearchModal } from '../../components/dashboard/booking-search-modal';
-import { FlightSearchModal } from '../../components/dashboard/flight-search-modal';
-import { AutoFillFlightForm } from '../../components/dashboard/auto-fill-flight-form';
-import { BookingDetailsView } from '../../components/dashboard/booking-details-view';
 import { Flight, FlightCategoryType } from '@reservasegura/types';
 import { apiService } from '../../lib/api';
+import {
+  Plane,
+  Calendar,
+  Search,
+  Filter,
+  Plus,
+  Bell,
+  Settings,
+  Eye,
+  Edit,
+  Trash2,
+  CheckCircle,
+  Clock,
+  MapPin,
+  Users,
+  Link as LinkIcon
+} from 'lucide-react';
+
+type ModuleType = 'flights' | 'bookings' | 'monitoring' | 'accounts' | 'notifications' | 'changes';
+
+interface ExternalBooking {
+  id: string;
+  bookingCode: string;
+  lastName: string;
+  fullName: string;
+  airline: string;
+  flightNumber: string;
+  origin: string;
+  destination: string;
+  departureDate: string;
+  seat?: string;
+  checkInStatus: string;
+  bookingStatus: string;
+}
+
+interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  message: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  read: boolean;
+  createdAt: string;
+  bookingCode?: string;
+}
+
+interface BookingChange {
+  id: string;
+  bookingCode: string;
+  passengerName: string;
+  changeType: string;
+  oldValue: string;
+  newValue: string;
+  detectedAt: string;
+}
+
+interface AirlineAccount {
+  id: string;
+  airline: string;
+  email: string;
+  isActive: boolean;
+  lastSyncAt: string | null;
+}
 
 export default function DashboardPage() {
-  const [flights, setFlights] = useState<Flight[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Estado principal
+  const [activeModule, setActiveModule] = useState<ModuleType>('flights');
   const [activeTab, setActiveTab] = useState<FlightCategoryType>('ALL');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedAirline, setSelectedAirline] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingFlight, setEditingFlight] = useState<Flight | null>(null);
-  const [showMonitor, setShowMonitor] = useState(false);
-  const [showBookingSearch, setShowBookingSearch] = useState(false);
-  const [showFlightSearch, setShowFlightSearch] = useState(false);
-  const [showAutoFillForm, setShowAutoFillForm] = useState(false);
-  const [showBookingDetails, setShowBookingDetails] = useState(false);
-  const [bookingData, setBookingData] = useState<any>(null);
-  const [fullBookingDetails, setFullBookingDetails] = useState<any>(null);
 
-  // Load flights from database on mount
+  // Dados
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [bookings, setBookings] = useState<ExternalBooking[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [changes, setChanges] = useState<BookingChange[]>([]);
+  const [accounts, setAccounts] = useState<AirlineAccount[]>([]);
+
+  // UI States
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedAirline, setSelectedAirline] = useState<string>('');
+  const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
+  const [selectedBooking, setSelectedBooking] = useState<ExternalBooking | null>(null);
+
+  // Carregar dados
   useEffect(() => {
-    loadFlights();
+    loadAllData();
   }, []);
+
+  const loadAllData = async () => {
+    setIsLoading(true);
+    await Promise.all([
+      loadFlights(),
+      loadBookings(),
+      loadNotifications(),
+      loadChanges(),
+      loadAccounts()
+    ]);
+    setIsLoading(false);
+  };
 
   const loadFlights = async () => {
     try {
-      setIsLoading(true);
-      const response = await apiService.getAllFlights({ limit: 100 });
-
+      const response = await apiService.getAllFlights({ limit: 1000 });
       if (response.success && response.data) {
         setFlights(response.data);
       }
     } catch (error) {
-      console.error('❌ Error loading flights:', error);
-      // Show error toast or message to user
-    } finally {
-      setIsLoading(false);
+      console.error('Erro ao carregar voos:', error);
     }
   };
 
-  // Filter flights based on tab, search, and airline
+  const loadBookings = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/v2/external-booking/list?page=1&pageSize=1000`);
+      const result = await response.json();
+      if (result.success && result.data) {
+        setBookings(result.data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar reservas:', error);
+    }
+  };
+
+  const loadNotifications = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/booking-monitor/notifications`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const result = await response.json();
+      if (result.success) {
+        setNotifications(result.data || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar notificações:', error);
+    }
+  };
+
+  const loadChanges = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/booking-monitor/changes`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const result = await response.json();
+      if (result.success) {
+        setChanges(result.data || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar alterações:', error);
+    }
+  };
+
+  const loadAccounts = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const response = await fetch(`${apiUrl}/api/booking-monitor/accounts`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const result = await response.json();
+      if (result.success) {
+        setAccounts(result.data || []);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar contas:', error);
+    }
+  };
+
+  // Filtros
   const filteredFlights = useMemo(() => {
     let filtered = [...flights];
 
-    // Filter by category
     switch (activeTab) {
       case 'UPCOMING':
         filtered = filtered.filter(f =>
@@ -76,7 +196,6 @@ export default function DashboardPage() {
         break;
     }
 
-    // Filter by search term
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(f =>
@@ -88,7 +207,6 @@ export default function DashboardPage() {
       );
     }
 
-    // Filter by airline
     if (selectedAirline) {
       filtered = filtered.filter(f => f.airline === selectedAirline);
     }
@@ -96,238 +214,648 @@ export default function DashboardPage() {
     return filtered;
   }, [flights, activeTab, searchTerm, selectedAirline]);
 
-  // Calculate counts for tabs
+  const filteredBookings = useMemo(() => {
+    let filtered = [...bookings];
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(b =>
+        b.bookingCode.toLowerCase().includes(term) ||
+        b.fullName.toLowerCase().includes(term) ||
+        b.flightNumber.toLowerCase().includes(term)
+      );
+    }
+
+    if (selectedAirline) {
+      filtered = filtered.filter(b => b.airline === selectedAirline);
+    }
+
+    return filtered;
+  }, [bookings, searchTerm, selectedAirline]);
+
+  // Counts
   const counts = useMemo(() => ({
     all: flights.length,
-    upcoming: flights.filter(f =>
-      new Date(f.departureTime) > new Date() && f.status === 'SCHEDULED'
-    ).length,
+    upcoming: flights.filter(f => new Date(f.departureTime) > new Date() && f.status === 'SCHEDULED').length,
     pending: flights.filter(f => f.status === 'SCHEDULED').length,
     checkinOpen: flights.filter(f => f.checkInStatus === 'OPEN').length,
     checkinClosed: flights.filter(f => f.checkInStatus === 'CLOSED').length,
     flown: flights.filter(f => f.status === 'ARRIVED').length,
-  }), [flights]);
+    bookings: bookings.length,
+    notifications: notifications.filter(n => !n.read).length,
+    changes: changes.length,
+    accounts: accounts.filter(a => a.isActive).length
+  }), [flights, bookings, notifications, changes, accounts]);
 
-  const handleDeleteFlight = async (id: string) => {
-    try {
-      const response = await apiService.deleteFlight(id);
+  const airlines = useMemo(() =>
+    Array.from(new Set([...flights.map(f => f.airline), ...bookings.map(b => b.airline)])).sort(),
+    [flights, bookings]
+  );
 
-      if (response.success) {
-        setFlights(prev => prev.filter(f => f.id !== id));
-        console.log('✅ Flight deleted successfully');
-      }
-    } catch (error) {
-      console.error('❌ Error deleting flight:', error);
-      alert('Failed to delete flight. Please try again.');
+  const formatDate = (dateStr: string | Date) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('pt-BR') + ' ' + date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'CONFIRMED': return 'bg-green-100 text-green-800';
+      case 'SCHEDULED': return 'bg-blue-100 text-blue-800';
+      case 'ARRIVED': return 'bg-gray-100 text-gray-800';
+      case 'CANCELLED': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleUpdateFlight = async (id: string, updates: Partial<Flight>) => {
-    try {
-      const response = await apiService.updateFlight(id, updates);
-
-      if (response.success && response.data) {
-        setFlights(prev => prev.map(f =>
-          f.id === id ? response.data : f
-        ));
-        console.log('✅ Flight updated successfully');
-      }
-    } catch (error) {
-      console.error('❌ Error updating flight:', error);
-      alert('Failed to update flight. Please try again.');
+  const getCheckInColor = (status: string) => {
+    switch (status) {
+      case 'OPEN': return 'bg-green-100 text-green-800';
+      case 'CLOSED': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const handleAddFlight = () => {
-    setEditingFlight(null);
-    setBookingData(null);
-    setIsModalOpen(true);
-  };
-
-  const handleAddFlightFromBooking = () => {
-    setEditingFlight(null);
-    setBookingData(null);
-    setShowBookingSearch(true);
-  };
-
-  const handleSearchFlight = () => {
-    setEditingFlight(null);
-    setBookingData(null);
-    setShowFlightSearch(true);
-  };
-
-  const handleFlightSearchFound = (flightData: any) => {
-    console.log('✈️ Vôo encontrado, abrindo formulário editável:', flightData);
-
-    // Passar dados para o formulário EDITÁVEL (AutoFillFlightForm)
-    setBookingData(flightData);
-    setShowAutoFillForm(true);
-  };
-
-  const handleEditFlight = (flight: Flight) => {
-    setEditingFlight(flight);
-    setBookingData(null);
-    setIsModalOpen(true);
-  };
-
-  const handleBookingFound = (foundBookingData: any) => {
-    console.log('📋 Reserva encontrada, abrindo formulário de voo:', foundBookingData);
-    setBookingData(foundBookingData);
-    setShowAutoFillForm(true);
-  };
-
-  const handleSubmitFlight = async (flightData: Omit<Flight, 'id'>) => {
-    try {
-      if (editingFlight) {
-        // Edit existing flight
-        const response = await apiService.updateFlight(editingFlight.id, flightData);
-
-        if (response.success && response.data) {
-          setFlights(prev => prev.map(f =>
-            f.id === editingFlight.id ? response.data : f
-          ));
-          console.log('✅ Flight updated successfully');
-        }
-      } else {
-        // Add new flight
-        const response = await apiService.createFlight(flightData);
-
-        if (response.success && response.data) {
-          setFlights(prev => [response.data, ...prev]);
-          console.log('✅ Flight created successfully');
-        }
-      }
-      setIsModalOpen(false);
-      setShowAutoFillForm(false);
-    } catch (error) {
-      console.error('❌ Error saving flight:', error);
-      alert('Failed to save flight. Please try again.');
+  // Renderizar conteúdo baseado no módulo ativo
+  const renderModuleContent = () => {
+    switch (activeModule) {
+      case 'flights':
+        return renderFlightsModule();
+      case 'bookings':
+        return renderBookingsModule();
+      case 'monitoring':
+        return renderMonitoringModule();
+      case 'accounts':
+        return renderAccountsModule();
+      case 'notifications':
+        return renderNotificationsModule();
+      case 'changes':
+        return renderChangesModule();
+      default:
+        return null;
     }
   };
 
-  const handleFlightFound = (scrapedData: any) => {
-    // Add scraped flight data to the list
-    if (scrapedData && scrapedData.flights) {
-      const newFlights = scrapedData.flights.map((flight: any, index: number) => ({
-        id: `scraped_${Date.now()}_${index}`,
-        flightNumber: flight.flightNumber || '',
-        origin: flight.origin || '',
-        destination: flight.destination || '',
-        departureTime: new Date(flight.departureTime || Date.now()),
-        arrivalTime: new Date(flight.arrivalTime || Date.now()),
-        airline: flight.airline || '',
-        aircraft: flight.aircraft || 'N/A',
-        status: flight.status || 'SCHEDULED',
-        checkInStatus: flight.checkInStatus || 'NOT_AVAILABLE',
-        locator: flight.locator,
-        passengerFirstName: flight.passengerFirstName,
-        passengerLastName: flight.passengerLastName,
-      }));
+  const renderFlightsModule = () => (
+    <div className="space-y-4">
+      {/* Tabela de Voos */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-blue-500 text-white">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold">COMPANHIA</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">STATUS</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">PASSAGEIRO</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">LOCALIZADOR</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">CHECK-IN</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">ROTA</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">PARTIDA</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredFlights.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    Nenhum voo encontrado
+                  </td>
+                </tr>
+              ) : (
+                filteredFlights.map((flight) => (
+                  <tr key={flight.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <span className="font-bold text-blue-600">{flight.airline}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded ${getStatusColor(flight.status)}`}>
+                        {flight.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm">
+                        <div className="font-medium">{flight.passengerFirstName} {flight.passengerLastName}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold">{flight.locator}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded ${getCheckInColor(flight.checkInStatus)}`}>
+                        {flight.checkInStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold">{flight.origin}</span>
+                        <Plane className="w-4 h-4 text-blue-500" />
+                        <span className="font-mono font-bold">{flight.destination}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">{formatDate(flight.departureTime)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSelectedFlight(flight)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="Visualizar"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="p-1 text-green-600 hover:bg-green-50 rounded" title="Editar">
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button className="p-1 text-red-600 hover:bg-red-50 rounded" title="Excluir">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 
-      setFlights(prev => [...newFlights, ...prev]);
-    }
-  };
+  const renderBookingsModule = () => (
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-purple-500 text-white">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-semibold">COMPANHIA</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">LOCALIZADOR</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">PASSAGEIRO</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">VOO</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">ROTA</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">PARTIDA</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">ASSENTO</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">STATUS</th>
+                <th className="px-4 py-3 text-left text-sm font-semibold">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredBookings.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
+                    Nenhuma reserva encontrada
+                  </td>
+                </tr>
+              ) : (
+                filteredBookings.map((booking) => (
+                  <tr key={booking.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <span className="font-bold text-purple-600">{booking.airline}</span>
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold">{booking.bookingCode}</td>
+                    <td className="px-4 py-3 text-sm">{booking.fullName}</td>
+                    <td className="px-4 py-3 font-mono">{booking.flightNumber}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{booking.origin}</span>
+                        <Plane className="w-4 h-4 text-purple-500" />
+                        <span className="font-mono">{booking.destination}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm">{formatDate(booking.departureDate)}</td>
+                    <td className="px-4 py-3 font-mono">{booking.seat || '-'}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-1 text-xs font-semibold rounded ${getStatusColor(booking.bookingStatus)}`}>
+                        {booking.bookingStatus}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSelectedBooking(booking)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="Visualizar"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button className="p-1 text-green-600 hover:bg-green-50 rounded" title="Monitorar">
+                          <Bell className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderMonitoringModule = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold mb-4">📊 Status do Monitoramento</h3>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
+            <span className="font-medium">Contas Ativas</span>
+            <span className="text-2xl font-bold text-blue-600">{counts.accounts}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-green-50 rounded">
+            <span className="font-medium">Reservas Monitoradas</span>
+            <span className="text-2xl font-bold text-green-600">{counts.bookings}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-yellow-50 rounded">
+            <span className="font-medium">Alterações Detectadas</span>
+            <span className="text-2xl font-bold text-yellow-600">{counts.changes}</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-red-50 rounded">
+            <span className="font-medium">Notificações Não Lidas</span>
+            <span className="text-2xl font-bold text-red-600">{counts.notifications}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-bold mb-4">🔗 Contas Conectadas</h3>
+        <div className="space-y-2">
+          {accounts.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">Nenhuma conta conectada</p>
+          ) : (
+            accounts.map((account) => (
+              <div key={account.id} className="flex items-center justify-between p-3 border rounded">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                    ✈️
+                  </div>
+                  <div>
+                    <div className="font-medium">{account.airline}</div>
+                    <div className="text-sm text-gray-500">{account.email}</div>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                  account.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {account.isActive ? 'Ativa' : 'Inativa'}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderAccountsModule = () => (
+    <div className="bg-white rounded-lg shadow p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-lg font-bold">🔗 Gerenciar Contas de Companhias</h3>
+        <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          Conectar Nova Conta
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {accounts.map((account) => (
+          <div key={account.id} className="border rounded-lg p-4 hover:shadow-lg transition-shadow">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-2xl">
+                  ✈️
+                </div>
+                <div>
+                  <h4 className="font-bold">{account.airline}</h4>
+                  <p className="text-sm text-gray-500">{account.email}</p>
+                </div>
+              </div>
+              <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                account.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {account.isActive ? '✓ Ativa' : '✗ Inativa'}
+              </span>
+            </div>
+            <div className="text-sm text-gray-600 mb-3">
+              Última sincronização: {account.lastSyncAt ? formatDate(account.lastSyncAt) : 'Nunca'}
+            </div>
+            <div className="flex gap-2">
+              <button className="flex-1 px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                🔄 Sincronizar
+              </button>
+              <button className="px-3 py-1 border border-red-500 text-red-600 text-sm rounded hover:bg-red-50">
+                🗑️
+              </button>
+            </div>
+          </div>
+        ))}
+        {accounts.length === 0 && (
+          <div className="col-span-full text-center py-12 text-gray-500">
+            Nenhuma conta conectada. Clique em "Conectar Nova Conta" para começar.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderNotificationsModule = () => (
+    <div className="space-y-4">
+      {notifications.length === 0 ? (
+        <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
+          📭 Nenhuma notificação
+        </div>
+      ) : (
+        notifications.map((notification) => (
+          <div
+            key={notification.id}
+            className={`bg-white rounded-lg shadow p-4 ${
+              !notification.read ? 'border-l-4 border-blue-500' : ''
+            }`}
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">
+                    {notification.severity === 'CRITICAL' ? '🚨' :
+                     notification.severity === 'WARNING' ? '⚠️' : 'ℹ️'}
+                  </span>
+                  <h4 className="font-bold">{notification.title}</h4>
+                  {!notification.read && (
+                    <span className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Nova</span>
+                  )}
+                </div>
+                <p className="text-gray-700 mb-2">{notification.message}</p>
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span>🕐 {formatDate(notification.createdAt)}</span>
+                  {notification.bookingCode && (
+                    <span className="font-mono">📝 {notification.bookingCode}</span>
+                  )}
+                </div>
+              </div>
+              <button className="text-red-600 hover:text-red-800">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  const renderChangesModule = () => (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-orange-500 text-white">
+            <tr>
+              <th className="px-4 py-3 text-left text-sm font-semibold">RESERVA</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">PASSAGEIRO</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">TIPO</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">ANTERIOR</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">NOVO</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold">DETECTADO EM</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {changes.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                  Nenhuma alteração registrada
+                </td>
+              </tr>
+            ) : (
+              changes.map((change) => (
+                <tr key={change.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-mono font-bold">{change.bookingCode}</td>
+                  <td className="px-4 py-3">{change.passengerName}</td>
+                  <td className="px-4 py-3">
+                    <span className="px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800">
+                      {change.changeType}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="px-2 py-1 bg-gray-100 rounded font-mono text-sm">
+                      {change.oldValue}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="px-2 py-1 bg-green-100 rounded font-mono text-sm font-bold">
+                      {change.newValue}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">{formatDate(change.detectedAt)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-8 shadow-xl">
+          <div className="flex items-center gap-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <p className="text-lg">Carregando dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isLoading && (
-        <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 shadow-xl">
+      {/* Header */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="container mx-auto px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <p className="text-lg">Carregando voos...</p>
+              <Plane className="w-8 h-8 text-blue-500" />
+              <h1 className="text-2xl font-bold">VoaLive Dashboard</h1>
+            </div>
+            <button
+              onClick={() => loadAllData()}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
+            >
+              🔄 Atualizar
+            </button>
+          </div>
+
+          {/* Módulos - Navegação Principal */}
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            <button
+              onClick={() => setActiveModule('flights')}
+              className={`px-6 py-2 rounded-t-lg font-medium whitespace-nowrap transition-colors ${
+                activeModule === 'flights'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              ✈️ Voos ({counts.all})
+            </button>
+            <button
+              onClick={() => setActiveModule('bookings')}
+              className={`px-6 py-2 rounded-t-lg font-medium whitespace-nowrap transition-colors ${
+                activeModule === 'bookings'
+                  ? 'bg-purple-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              📋 Reservas ({counts.bookings})
+            </button>
+            <button
+              onClick={() => setActiveModule('monitoring')}
+              className={`px-6 py-2 rounded-t-lg font-medium whitespace-nowrap transition-colors ${
+                activeModule === 'monitoring'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              📊 Monitoramento
+            </button>
+            <button
+              onClick={() => setActiveModule('accounts')}
+              className={`px-6 py-2 rounded-t-lg font-medium whitespace-nowrap transition-colors ${
+                activeModule === 'accounts'
+                  ? 'bg-indigo-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              🔗 Contas ({counts.accounts})
+            </button>
+            <button
+              onClick={() => setActiveModule('notifications')}
+              className={`px-6 py-2 rounded-t-lg font-medium whitespace-nowrap transition-colors relative ${
+                activeModule === 'notifications'
+                  ? 'bg-yellow-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              🔔 Notificações
+              {counts.notifications > 0 && (
+                <span className="absolute -top-1 -right-1 px-2 py-1 text-xs bg-red-500 text-white rounded-full">
+                  {counts.notifications}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setActiveModule('changes')}
+              className={`px-6 py-2 rounded-t-lg font-medium whitespace-nowrap transition-colors ${
+                activeModule === 'changes'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              📊 Alterações ({counts.changes})
+            </button>
+          </div>
+
+          {/* Sub-abas para Voos */}
+          {activeModule === 'flights' && (
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => setActiveTab('ALL')}
+                className={`px-4 py-2 rounded text-sm font-medium ${
+                  activeTab === 'ALL' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Todos {counts.all}
+              </button>
+              <button
+                onClick={() => setActiveTab('UPCOMING')}
+                className={`px-4 py-2 rounded text-sm font-medium ${
+                  activeTab === 'UPCOMING' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Próximos {counts.upcoming}
+              </button>
+              <button
+                onClick={() => setActiveTab('PENDING')}
+                className={`px-4 py-2 rounded text-sm font-medium ${
+                  activeTab === 'PENDING' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Pendentes {counts.pending}
+              </button>
+              <button
+                onClick={() => setActiveTab('CHECKIN_OPEN')}
+                className={`px-4 py-2 rounded text-sm font-medium ${
+                  activeTab === 'CHECKIN_OPEN' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Check-in Aberto {counts.checkinOpen}
+              </button>
+              <button
+                onClick={() => setActiveTab('CHECKIN_CLOSED')}
+                className={`px-4 py-2 rounded text-sm font-medium ${
+                  activeTab === 'CHECKIN_CLOSED' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Check-in Fechado {counts.checkinClosed}
+              </button>
+              <button
+                onClick={() => setActiveTab('FLOWN')}
+                className={`px-4 py-2 rounded text-sm font-medium ${
+                  activeTab === 'FLOWN' ? 'bg-blue-500 text-white' : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+              >
+                Voados {counts.flown}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filtros */}
+      {(activeModule === 'flights' || activeModule === 'bookings') && (
+        <div className="bg-white border-b px-6 py-4">
+          <div className="container mx-auto">
+            <div className="flex gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    placeholder="Pesquisar por passageiro, localizador, rota..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              <div className="w-64">
+                <select
+                  value={selectedAirline}
+                  onChange={(e) => setSelectedAirline(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Todas as Companhias</option>
+                  {airlines.map(airline => (
+                    <option key={airline} value={airline}>{airline}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedAirline('');
+                }}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+              >
+                Limpar
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">Gestão de Voos</h1>
-            <div className="flex gap-2">
-              <button
-                onClick={handleAddFlightFromBooking}
-                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors flex items-center gap-2"
-              >
-                <span>✈️</span>
-                Buscar Reserva
-              </button>
-              <button
-                onClick={() => setShowMonitor(!showMonitor)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-              >
-                {showMonitor ? 'Ocultar Monitor' : 'Mostrar Monitor'}
-              </button>
-            </div>
-          </div>
-          <FlightTabs
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            counts={counts}
-          />
-        </div>
+      {/* Conteúdo do Módulo */}
+      <div className="container mx-auto px-6 py-6">
+        {renderModuleContent()}
       </div>
 
-      <div className="container mx-auto px-6 space-y-6">
-        {showMonitor && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Monitoramento de Voos Online</h2>
-            <FlightMonitor onFlightFound={handleFlightFound} />
-          </div>
-        )}
-
-        <FlightFilters
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          selectedAirline={selectedAirline}
-          onAirlineChange={setSelectedAirline}
-        />
-
-        <div className="bg-white rounded-lg shadow">
-          <FlightTable
-            flights={filteredFlights}
-            onDeleteFlight={handleDeleteFlight}
-            onUpdateFlight={handleUpdateFlight}
-            onEditFlight={handleEditFlight}
-          />
-        </div>
-      </div>
-
-      <FlightFormModal
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        onSubmit={handleSubmitFlight}
-        flight={editingFlight}
-      />
-
-      <BookingSearchModal
-        open={showBookingSearch}
-        onOpenChange={setShowBookingSearch}
-        onBookingFound={handleBookingFound}
-      />
-
-      <FlightSearchModal
-        open={showFlightSearch}
-        onOpenChange={setShowFlightSearch}
-        onFlightFound={handleFlightSearchFound}
-      />
-
-      <AutoFillFlightForm
-        open={showAutoFillForm}
-        onOpenChange={setShowAutoFillForm}
-        onSubmit={handleSubmitFlight}
-        bookingData={bookingData}
-        flight={editingFlight}
-      />
-
-      <BookingDetailsView
-        open={showBookingDetails}
-        onOpenChange={setShowBookingDetails}
-        booking={fullBookingDetails}
-      />
-
-      <FloatingActionButton onClick={handleAddFlight} />
+      {/* Botão Flutuante */}
+      <button className="fixed bottom-8 right-8 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110">
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }
