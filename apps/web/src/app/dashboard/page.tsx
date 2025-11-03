@@ -18,7 +18,9 @@ import {
   Clock,
   MapPin,
   Users,
-  Link as LinkIcon
+  Link as LinkIcon,
+  User,
+  LogOut
 } from 'lucide-react';
 
 type ModuleType = 'flights' | 'bookings' | 'monitoring' | 'accounts' | 'notifications' | 'changes';
@@ -67,7 +69,17 @@ interface AirlineAccount {
   lastSyncAt: string | null;
 }
 
+import { AuthGuard } from '../../components/auth/AuthGuard';
+
 export default function DashboardPage() {
+  return (
+    <AuthGuard>
+      <DashboardContent />
+    </AuthGuard>
+  );
+}
+
+function DashboardContent() {
   // Estado principal
   const [activeModule, setActiveModule] = useState<ModuleType>('flights');
   const [activeTab, setActiveTab] = useState<FlightCategoryType>('ALL');
@@ -698,6 +710,12 @@ export default function DashboardPage() {
     );
   }
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -705,15 +723,39 @@ export default function DashboardPage() {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <Plane className="w-8 h-8 text-blue-500" />
-              <h1 className="text-2xl font-bold">VoaLive Dashboard</h1>
+              {/* Logo Reserva Segura */}
+              <div className="relative w-12 h-12 bg-gradient-to-br from-blue-900 via-blue-800 to-cyan-500 rounded-xl flex items-center justify-center shadow-md">
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Plane className="w-6 h-6 text-white transform rotate-45" strokeWidth={2.5} />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-blue-900">Reserva Segura</h1>
+                <p className="text-xs text-cyan-600 font-medium uppercase tracking-wide">Dashboard</p>
+              </div>
             </div>
-            <button
-              onClick={() => loadAllData()}
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-2"
-            >
-              🔄 Atualizar
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => loadAllData()}
+                className="px-4 py-2 bg-gradient-to-r from-blue-900 to-cyan-600 text-white rounded-lg hover:from-blue-800 hover:to-cyan-500 flex items-center gap-2 shadow-md transition-all"
+              >
+                🔄 Atualizar
+              </button>
+              <button
+                onClick={() => window.location.href = '/profile'}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 shadow-md transition-all"
+              >
+                <User className="w-4 h-4" />
+                Perfil
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 border border-red-500 text-red-600 rounded-lg hover:bg-red-50 flex items-center gap-2 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+                Sair
+              </button>
+            </div>
           </div>
 
           {/* Módulos - Navegação Principal */}
