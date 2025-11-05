@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, Button, Input, Label } from '@reservasegura/ui';
+import { X } from 'lucide-react';
 
 interface BookingRegisterModalProps {
   open: boolean;
@@ -10,6 +10,7 @@ interface BookingRegisterModalProps {
 }
 
 export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }: BookingRegisterModalProps) {
+  if (!open) return null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -33,6 +34,7 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [document, setDocument] = useState('');
+  const [enableMonitoring, setEnableMonitoring] = useState(true); // Monitoramento ativo por padrão
 
   // Auto-save: quando todos os campos obrigatórios estiverem preenchidos
   useEffect(() => {
@@ -91,6 +93,7 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
         document: document.trim() || undefined,
         source: 'MANUAL',
         purchaseDate: new Date().toISOString(),
+        autoUpdate: enableMonitoring, // Ativar monitoramento se marcado
       };
 
       console.log('📝 Cadastrando reserva:', payload);
@@ -144,56 +147,66 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
     setEmail('');
     setPhone('');
     setDocument('');
+    setEnableMonitoring(true);
     setError('');
     setSuccess('');
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 my-8">
+        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
+          <div className="flex items-center gap-2">
             <span className="text-2xl">📝</span>
-            Cadastrar Reserva Manualmente
-          </DialogTitle>
-        </DialogHeader>
+            <h3 className="text-xl font-bold">Cadastrar Reserva Manualmente</h3>
+          </div>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="text-gray-500 hover:text-gray-700 p-1"
+            type="button"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             {/* Localizador */}
             <div className="space-y-2">
-              <Label htmlFor="bookingCode">
+              <label className="block text-sm font-medium mb-2" htmlFor="bookingCode">
                 Localizador <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="bookingCode"
+                type="text"
                 value={bookingCode}
                 onChange={(e) => setBookingCode(e.target.value.toUpperCase())}
                 placeholder="Ex: ABC123"
                 maxLength={8}
                 required
-                className="font-mono"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
               />
             </div>
 
             {/* Sobrenome */}
             <div className="space-y-2">
-              <Label htmlFor="lastName">
+              <label className="block text-sm font-medium mb-2" htmlFor="lastName">
                 Sobrenome <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="lastName"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value.toUpperCase())}
                 placeholder="Ex: SILVA"
                 required
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Primeiro Nome */}
             <div className="space-y-2">
-              <Label htmlFor="firstName">Primeiro Nome</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="firstName">Primeiro Nome</label>
+              <input
                 id="firstName"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value.toUpperCase())}
@@ -203,9 +216,9 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
 
             {/* Companhia Aérea */}
             <div className="space-y-2">
-              <Label htmlFor="airline">
+              <label className="block text-sm font-medium mb-2" htmlFor="airline">
                 Companhia Aérea <span className="text-red-600">*</span>
-              </Label>
+              </label>
               <select
                 id="airline"
                 value={airline}
@@ -222,116 +235,121 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
 
             {/* Número do Voo */}
             <div className="space-y-2">
-              <Label htmlFor="flightNumber">
+              <label className="block text-sm font-medium mb-2" htmlFor="flightNumber">
                 Número do Voo <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="flightNumber"
                 value={flightNumber}
                 onChange={(e) => setFlightNumber(e.target.value.toUpperCase())}
                 placeholder="Ex: G31234"
                 required
-                className="font-mono"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
               />
             </div>
 
             {/* Origem */}
             <div className="space-y-2">
-              <Label htmlFor="origin">
+              <label className="block text-sm font-medium mb-2" htmlFor="origin">
                 Origem (IATA) <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="origin"
                 value={origin}
                 onChange={(e) => setOrigin(e.target.value.toUpperCase())}
                 placeholder="Ex: GRU, CGH, SDU"
                 maxLength={3}
                 required
-                className="font-mono"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
               />
             </div>
 
             {/* Destino */}
             <div className="space-y-2">
-              <Label htmlFor="destination">
+              <label className="block text-sm font-medium mb-2" htmlFor="destination">
                 Destino (IATA) <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="destination"
                 value={destination}
                 onChange={(e) => setDestination(e.target.value.toUpperCase())}
                 placeholder="Ex: SLZ, FOR, SSA"
                 maxLength={3}
                 required
-                className="font-mono"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
               />
             </div>
 
             {/* Data de Partida */}
             <div className="space-y-2">
-              <Label htmlFor="departureDate">
+              <label className="block text-sm font-medium mb-2" htmlFor="departureDate">
                 Data de Partida <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="departureDate"
                 type="date"
                 value={departureDate}
                 onChange={(e) => setDepartureDate(e.target.value)}
                 required
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Horário de Partida */}
             <div className="space-y-2">
-              <Label htmlFor="departureTime">
+              <label className="block text-sm font-medium mb-2" htmlFor="departureTime">
                 Horário de Partida <span className="text-red-600">*</span>
-              </Label>
-              <Input
+              </label>
+              <input
                 id="departureTime"
                 type="time"
                 value={departureTime}
                 onChange={(e) => setDepartureTime(e.target.value)}
                 required
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Data de Chegada */}
             <div className="space-y-2">
-              <Label htmlFor="arrivalDate">Data de Chegada</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="arrivalDate">Data de Chegada</label>
+              <input
                 id="arrivalDate"
                 type="date"
                 value={arrivalDate}
                 onChange={(e) => setArrivalDate(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Horário de Chegada */}
             <div className="space-y-2">
-              <Label htmlFor="arrivalTime">Horário de Chegada</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="arrivalTime">Horário de Chegada</label>
+              <input
                 id="arrivalTime"
                 type="time"
                 value={arrivalTime}
                 onChange={(e) => setArrivalTime(e.target.value)}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Assento */}
             <div className="space-y-2">
-              <Label htmlFor="seat">Assento</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="seat">Assento</label>
+              <input
                 id="seat"
                 value={seat}
                 onChange={(e) => setSeat(e.target.value.toUpperCase())}
                 placeholder="Ex: 15A"
                 maxLength={4}
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Classe */}
             <div className="space-y-2">
-              <Label htmlFor="flightClass">Classe</Label>
+              <label className="block text-sm font-medium mb-2" htmlFor="flightClass">Classe</label>
               <select
                 id="flightClass"
                 value={flightClass}
@@ -346,37 +364,67 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
 
             {/* Email */}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="email">Email</label>
+              <input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="passageiro@example.com"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Telefone */}
             <div className="space-y-2">
-              <Label htmlFor="phone">Telefone</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="phone">Telefone</label>
+              <input
                 id="phone"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="+55 11 98888-7777"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
             {/* Documento */}
             <div className="space-y-2 col-span-2">
-              <Label htmlFor="document">CPF/Passaporte</Label>
-              <Input
+              <label className="block text-sm font-medium mb-2" htmlFor="document">CPF/Passaporte</label>
+              <input
                 id="document"
                 value={document}
                 onChange={(e) => setDocument(e.target.value)}
                 placeholder="123.456.789-00"
+                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
+          </div>
+
+          {/* Checkbox de Monitoramento */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enableMonitoring}
+                onChange={(e) => setEnableMonitoring(e.target.checked)}
+                className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+              />
+              <div className="flex-1">
+                <div className="font-semibold text-blue-900 flex items-center gap-2">
+                  📊 Ativar Monitoramento Automático
+                  <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full font-normal">
+                    Recomendado
+                  </span>
+                </div>
+                <p className="text-sm text-blue-700 mt-1">
+                  O sistema irá monitorar esta reserva automaticamente e notificar sobre:
+                  cancelamentos, mudanças de horário, portão, assento e status do voo.
+                </p>
+                <p className="text-xs text-blue-600 mt-2 italic">
+                  ⏱️ Verificação automática a cada 15 minutos
+                </p>
+              </div>
+            </label>
           </div>
 
           {/* Mensagens */}
@@ -400,17 +448,21 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
 
           {/* Botões */}
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button
+            <button
               type="button"
-              variant="outline"
               onClick={() => {
                 resetForm();
                 onOpenChange(false);
               }}
+              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancelar
-            </Button>
-            <Button type="submit" disabled={loading} className="min-w-32">
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="min-w-32 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
               {loading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -419,10 +471,10 @@ export function BookingRegisterModal({ open, onOpenChange, onBookingRegistered }
               ) : (
                 '📝 Cadastrar Reserva'
               )}
-            </Button>
+            </button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

@@ -45,10 +45,12 @@ interface Notification {
   type: string;
   title: string;
   message: string;
-  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   read: boolean;
   createdAt: string;
   bookingCode?: string;
+  actionUrl?: string;
+  metadata?: string;
 }
 
 interface BookingChange {
@@ -70,6 +72,7 @@ interface AirlineAccount {
 }
 
 import { AuthGuard } from '../../components/auth/AuthGuard';
+import { BookingRegisterModal } from '../../components/dashboard/booking-register-modal';
 
 export default function DashboardPage() {
   return (
@@ -98,6 +101,7 @@ function DashboardContent() {
   const [selectedFlight, setSelectedFlight] = useState<Flight | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<ExternalBooking | null>(null);
   const [showConnectAccountModal, setShowConnectAccountModal] = useState(false);
+  const [showBookingRegisterModal, setShowBookingRegisterModal] = useState(false);
   const [newAccount, setNewAccount] = useState({
     airline: 'GOL',
     email: '',
@@ -148,12 +152,11 @@ function DashboardContent() {
   const loadNotifications = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const response = await fetch(`${apiUrl}/api/v2/booking-monitor/notifications`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-      });
+      // Usar nova API de notificações
+      const response = await fetch(`${apiUrl}/api/notifications?limit=100`);
       const result = await response.json();
       if (result.success) {
-        setNotifications(result.data || []);
+        setNotifications(result.notifications || []);
       }
     } catch (error) {
       console.error('Erro ao carregar notificações:', error);
@@ -602,49 +605,117 @@ function DashboardContent() {
     </div>
   );
 
-  const renderNotificationsModule = () => (
-    <div className="space-y-4">
-      {notifications.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
-          📭 Nenhuma notificação
-        </div>
-      ) : (
-        notifications.map((notification) => (
-          <div
-            key={notification.id}
-            className={`bg-white rounded-lg shadow p-4 ${
-              !notification.read ? 'border-l-4 border-blue-500' : ''
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">
-                    {notification.severity === 'CRITICAL' ? '🚨' :
-                     notification.severity === 'WARNING' ? '⚠️' : 'ℹ️'}
-                  </span>
-                  <h4 className="font-bold">{notification.title}</h4>
-                  {!notification.read && (
-                    <span className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Nova</span>
+  const renderNotificationsModule = () => {
+    const handleMarkAsRead = async (notificationId: string) => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const response = await fetch(`${apiUrl}/api/notifications/${notificationId}/read`, {
+          method: 'PATCH',
+        });
+        const result = await response.json();
+        if (result.success) {
+          await loadNotifications();
+        }
+      } catch (error) {
+        console.error('Erro ao marcar notificação como lida:', error);
+      }
+    };
+
+    const getPriorityIcon = (priority: string) => {
+      switch (priority) {
+        case 'URGENT': return '🚨';
+        case 'HIGH': return '⚠️';
+        case 'MEDIUM': return '⚡';
+        case 'LOW': return 'ℹ️';
+        default: return '📢';
+      }
+    };
+
+    const getPriorityColor = (priority: string) => {
+      switch (priority) {
+        case 'URGENT': return 'border-red-500';
+        case 'HIGH': return 'border-orange-500';
+        case 'MEDIUM': return 'border-yellow-500';
+        case 'LOW': return 'border-blue-500';
+        default: return 'border-gray-300';
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {notifications.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-12 text-center text-gray-500">
+            <div className="text-6xl mb-4">📭</div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              Nenhuma notificação
+            </h3>
+            <p className="text-gray-600">
+              Você está em dia! Não há notificações pendentes.
+            </p>
+          </div>
+        ) : (
+          notifications.map((notification) => (
+            <div
+              key={notification.id}
+              className={`bg-white rounded-lg shadow p-4 border-l-4 ${getPriorityColor(notification.priority)} ${
+                !notification.read ? '' : 'opacity-70'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-2xl">
+                      {getPriorityIcon(notification.priority)}
+                    </span>
+                    <h4 className="font-bold">{notification.title}</h4>
+                    {!notification.read && (
+                      <span className="px-2 py-1 text-xs bg-blue-500 text-white rounded">Nova</span>
+                    )}
+                    <span className={`px-2 py-1 text-xs rounded ${
+                      notification.priority === 'URGENT' ? 'bg-red-100 text-red-800' :
+                      notification.priority === 'HIGH' ? 'bg-orange-100 text-orange-800' :
+                      notification.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-blue-100 text-blue-800'
+                    }`}>
+                      {notification.priority}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 mb-2 whitespace-pre-wrap">{notification.message}</p>
+                  <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                    <span>🕐 {formatDate(notification.createdAt)}</span>
+                    {notification.bookingCode && (
+                      <span className="font-mono bg-gray-100 px-2 py-1 rounded">📝 {notification.bookingCode}</span>
+                    )}
+                  </div>
+                  {notification.actionUrl && (
+                    <a
+                      href={notification.actionUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                    >
+                      Verificar Reserva →
+                    </a>
                   )}
                 </div>
-                <p className="text-gray-700 mb-2">{notification.message}</p>
-                <div className="flex items-center gap-4 text-sm text-gray-500">
-                  <span>🕐 {formatDate(notification.createdAt)}</span>
-                  {notification.bookingCode && (
-                    <span className="font-mono">📝 {notification.bookingCode}</span>
+                <div className="flex flex-col gap-2">
+                  {!notification.read && (
+                    <button
+                      onClick={() => handleMarkAsRead(notification.id)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                      title="Marcar como lida"
+                    >
+                      <CheckCircle className="w-5 h-5" />
+                    </button>
                   )}
                 </div>
               </div>
-              <button className="text-red-600 hover:text-red-800">
-                <Trash2 className="w-4 h-4" />
-              </button>
             </div>
-          </div>
-        ))
-      )}
-    </div>
-  );
+          ))
+        )}
+      </div>
+    );
+  };
 
   const renderChangesModule = () => (
     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -1003,8 +1074,22 @@ function DashboardContent() {
         </div>
       )}
 
+      {/* Modal: Cadastrar Reserva */}
+      <BookingRegisterModal
+        open={showBookingRegisterModal}
+        onOpenChange={setShowBookingRegisterModal}
+        onBookingRegistered={() => {
+          loadBookings();
+          loadFlights();
+        }}
+      />
+
       {/* Botão Flutuante */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110">
+      <button
+        onClick={() => setShowBookingRegisterModal(true)}
+        className="fixed bottom-8 right-8 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
+        title="+ Nova Reserva"
+      >
         <Plus className="w-6 h-6" />
       </button>
     </div>
