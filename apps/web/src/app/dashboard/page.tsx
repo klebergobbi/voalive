@@ -8,7 +8,6 @@ import {
   Calendar,
   Search,
   Filter,
-  Plus,
   Bell,
   Settings,
   Eye,
@@ -20,8 +19,12 @@ import {
   Users,
   Link as LinkIcon,
   User,
-  LogOut
+  LogOut,
+  Plus
 } from 'lucide-react';
+
+import { API_URL } from '../../config/api';
+import { BookingRegisterModal } from '../../components/dashboard/booking-register-modal';
 
 type ModuleType = 'flights' | 'bookings' | 'monitoring' | 'accounts' | 'notifications' | 'changes';
 
@@ -72,7 +75,7 @@ interface AirlineAccount {
 }
 
 import { AuthGuard } from '../../components/auth/AuthGuard';
-import { BookingRegisterModal } from '../../components/dashboard/booking-register-modal';
+
 
 export default function DashboardPage() {
   return (
@@ -138,7 +141,7 @@ function DashboardContent() {
 
   const loadBookings = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiUrl = API_URL;
       const response = await fetch(`${apiUrl}/api/v2/external-booking/list?page=1&pageSize=1000`);
       const result = await response.json();
       if (result.success && result.data) {
@@ -151,51 +154,79 @@ function DashboardContent() {
 
   const loadNotifications = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiUrl = API_URL;
       // Usar nova API de notificações
       const response = await fetch(`${apiUrl}/api/notifications?limit=100`);
+
+      // Se API retornar erro, apenas ignora (não é crítico)
+      if (!response.ok) {
+        console.warn('API de notifications não disponível:', response.status);
+        return;
+      }
+
       const result = await response.json();
       if (result.success) {
         setNotifications(result.notifications || []);
       }
     } catch (error) {
-      console.error('Erro ao carregar notificações:', error);
+      console.warn('Erro ao carregar notificações (não crítico):', error);
+      // Ignora o erro para não bloquear o dashboard
     }
   };
 
   const loadChanges = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiUrl = API_URL;
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.warn('Token não encontrado, não é possível carregar mudanças');
+        return;
+      }
+      
       const response = await fetch(`${apiUrl}/api/v2/booking-monitor/changes`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
+      
       const result = await response.json();
-      if (result.success) {
-        setChanges(result.data || []);
+      if (result.success && result.data) {
+        setChanges(result.data);
       }
     } catch (error) {
-      console.error('Erro ao carregar alterações:', error);
+      console.warn('Erro ao carregar mudanças (não crítico):', error);
     }
   };
 
   const loadAccounts = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiUrl = API_URL;
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        console.warn('Token não encontrado, não é possível carregar contas');
+        return;
+      }
+      
       const response = await fetch(`${apiUrl}/api/v2/booking-monitor/accounts`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
+      
       const result = await response.json();
-      if (result.success) {
-        setAccounts(result.data || []);
+      if (result.success && result.data) {
+        setAccounts(result.data);
       }
     } catch (error) {
-      console.error('Erro ao carregar contas:', error);
+      console.warn('Erro ao carregar contas (não crítico):', error);
     }
   };
 
   const handleConnectAccount = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      const apiUrl = API_URL;
       const response = await fetch(`${apiUrl}/api/v2/booking-monitor/connect-account`, {
         method: 'POST',
         headers: {
@@ -608,7 +639,7 @@ function DashboardContent() {
   const renderNotificationsModule = () => {
     const handleMarkAsRead = async (notificationId: string) => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+        const apiUrl = API_URL;
         const response = await fetch(`${apiUrl}/api/notifications/${notificationId}/read`, {
           method: 'PATCH',
         });
@@ -788,6 +819,7 @@ function DashboardContent() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b shadow-sm">
@@ -1073,25 +1105,24 @@ function DashboardContent() {
           </div>
         </div>
       )}
-
-      {/* Modal: Cadastrar Reserva */}
-      <BookingRegisterModal
-        open={showBookingRegisterModal}
-        onOpenChange={setShowBookingRegisterModal}
-        onBookingRegistered={() => {
-          loadBookings();
-          loadFlights();
-        }}
-      />
-
-      {/* Botão Flutuante */}
-      <button
-        onClick={() => setShowBookingRegisterModal(true)}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all hover:scale-110"
-        title="+ Nova Reserva"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
     </div>
+
+    {/* Modal de Cadastro de Reserva */}
+    <BookingRegisterModal
+      isOpen={showBookingRegisterModal}
+      onClose={() => setShowBookingRegisterModal(false)}
+      onSuccess={loadAllData}
+    />
+
+    {/* Botão Flutuante + */}
+    <button
+      onClick={() => setShowBookingRegisterModal(true)}
+      className="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-br from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 z-50 group"
+      title="Cadastrar Nova Reserva"
+    >
+      <Plus className="w-8 h-8" />
+      <span className="absolute -top-1 -left-1 w-4 h-4 bg-green-500 rounded-full animate-pulse"></span>
+    </button>
+    </>
   );
 }
