@@ -6,6 +6,7 @@ import { Search, Plane, Calendar, User, LogOut, Bell } from 'lucide-react';
 import { AuthGuard } from '../../components/auth/AuthGuard';
 import { BookingRegisterModal } from '../../components/dashboard/booking-register-modal';
 import { MonitoringButton } from '../../components/dashboard/monitoring-button';
+import { NotificationBell } from '../../components/notifications/notification-bell';
 
 export default function DashboardPage() {
   return (
@@ -45,6 +46,7 @@ function DashboardContent() {
 
               {/* Actions */}
               <div className="flex items-center gap-3">
+                <NotificationBell />
                 <button
                   onClick={() => window.location.href = '/profile'}
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
