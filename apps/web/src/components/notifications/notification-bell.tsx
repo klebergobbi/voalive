@@ -158,8 +158,8 @@ export function NotificationBell() {
       setLoading(true);
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
-      // Tentar buscar notificações
-      const response = await fetch(`${apiUrl}/api/notifications?limit=20`);
+      // Tentar buscar notificações (todas as recentes)
+      const response = await fetch(`${apiUrl}/api/notifications?limit=100`);
 
       if (response.ok) {
         const data = await response.json();
@@ -344,13 +344,16 @@ export function NotificationBell() {
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
-                  {notifications.map((notification) => (
+                  {notifications.slice(0, 10).map((notification) => (
                     <div
                       key={notification.id}
                       className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${
                         !notification.read ? 'bg-blue-50/50' : ''
                       }`}
-                      onClick={() => !notification.read && markAsRead(notification.id)}
+                      onClick={() => {
+                        setIsOpen(false);
+                        window.location.href = '/notifications';
+                      }}
                     >
                       <div className="flex gap-3">
                         <div className="flex-shrink-0 mt-0.5">
