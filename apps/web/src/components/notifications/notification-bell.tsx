@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Bell, X, AlertCircle, CheckCircle, Info, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, X, AlertCircle, CheckCircle, Info, AlertTriangle, Volume2 } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -19,8 +19,132 @@ export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const previousUnreadCount = useRef(0);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Web Audio API para sons de notificação
+  const playNotificationSound = (priority: string) => {
+    if (!soundEnabled) return;
+
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Frequências diferentes por prioridade
+      if (priority === 'URGENT') {
+        // Som de alarme urgente (3 beeps rápidos)
+        oscillator.frequency.value = 880; // A5
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+
+        // Segundo beep
+        const osc2 = audioContext.createOscillator();
+        const gain2 = audioContext.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioContext.destination);
+        osc2.frequency.value = 880;
+        gain2.gain.setValueAtTime(0.3, audioContext.currentTime + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.25);
+        osc2.start(audioContext.currentTime + 0.15);
+        osc2.stop(audioContext.currentTime + 0.25);
+
+        // Terceiro beep
+        const osc3 = audioContext.createOscillator();
+        const gain3 = audioContext.createGain();
+        osc3.connect(gain3);
+        gain3.connect(audioContext.destination);
+        osc3.frequency.value = 880;
+        gain3.gain.setValueAtTime(0.3, audioContext.currentTime + 0.3);
+        gain3.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+        osc3.start(audioContext.currentTime + 0.3);
+        osc3.stop(audioContext.currentTime + 0.4);
+      } else if (priority === 'HIGH') {
+        // Som de alerta alto (2 beeps)
+        oscillator.frequency.value = 660; // E5
+        gainNode.gain.setValueAtTime(0.2, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.15);
+
+        const osc2 = audioContext.createOscillator();
+        const gain2 = audioContext.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioContext.destination);
+        osc2.frequency.value = 660;
+        gain2.gain.setValueAtTime(0.2, audioContext.currentTime + 0.2);
+        gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.35);
+        osc2.start(audioContext.currentTime + 0.2);
+        osc2.stop(audioContext.currentTime + 0.35);
+      } else {
+        // Som suave para outras notificações
+        oscillator.frequency.value = 523; // C5
+        gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+      }
+    } catch (error) {
+      console.error('Erro ao reproduzir som:', error);
+    }
+  };
+
+  // Função para solicitar permissão de notificações push
+  const requestNotificationPermission = async () => {
+    if (!('Notification' in window)) {
+      alert('Seu navegador não suporta notificações');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      setPushEnabled(true);
+      localStorage.setItem('pushEnabled', 'true');
+    }
+  };
+
+  // Verificar se push está habilitado no carregamento
+  useEffect(() => {
+    const enabled = localStorage.getItem('pushEnabled') === 'true';
+    setPushEnabled(enabled && Notification.permission === 'granted');
+    const soundPref = localStorage.getItem('soundEnabled');
+    if (soundPref !== null) {
+      setSoundEnabled(soundPref === 'true');
+    }
+  }, []);
+
+  // Mostrar notificação push do navegador
+  const showBrowserNotification = (notification: Notification) => {
+    if (!pushEnabled || Notification.permission !== 'granted') return;
+
+    const options = {
+      body: notification.message,
+      icon: '/logo.png',
+      badge: '/logo.png',
+      tag: notification.id,
+      requireInteraction: notification.priority === 'URGENT',
+      data: {
+        url: '/notifications',
+        notificationId: notification.id
+      }
+    };
+
+    const browserNotif = new Notification(notification.title, options);
+
+    browserNotif.onclick = () => {
+      window.focus();
+      window.location.href = '/notifications';
+      browserNotif.close();
+    };
+  };
 
   useEffect(() => {
     loadNotifications();
@@ -40,7 +164,26 @@ export function NotificationBell() {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
-          setNotifications(data.data);
+          const newNotifications = data.data;
+          const currentUnreadCount = newNotifications.filter((n: Notification) => !n.read).length;
+
+          // Detectar novas notificações
+          if (previousUnreadCount.current > 0 && currentUnreadCount > previousUnreadCount.current) {
+            const newOnes = newNotifications.filter((n: Notification) =>
+              !n.read && !notifications.find(old => old.id === n.id)
+            );
+
+            // Tocar som e mostrar push para cada nova notificação
+            newOnes.forEach((notif: Notification) => {
+              if (notif.priority === 'URGENT' || notif.priority === 'HIGH') {
+                playNotificationSound(notif.priority);
+                showBrowserNotification(notif);
+              }
+            });
+          }
+
+          previousUnreadCount.current = currentUnreadCount;
+          setNotifications(newNotifications);
         }
       }
     } catch (error) {
@@ -271,9 +414,60 @@ export function NotificationBell() {
               )}
             </div>
 
+            {/* Configurações de Som e Push */}
+            <div className="p-3 border-t border-gray-200 bg-gray-50 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Volume2 className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm text-gray-700">Sons de alerta</span>
+                </div>
+                <button
+                  onClick={() => {
+                    const newState = !soundEnabled;
+                    setSoundEnabled(newState);
+                    localStorage.setItem('soundEnabled', String(newState));
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    soundEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      soundEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-gray-600" />
+                  <span className="text-sm text-gray-700">Push do navegador</span>
+                </div>
+                {pushEnabled ? (
+                  <button
+                    onClick={() => {
+                      setPushEnabled(false);
+                      localStorage.setItem('pushEnabled', 'false');
+                    }}
+                    className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors bg-blue-600"
+                  >
+                    <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform translate-x-6" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={requestNotificationPermission}
+                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors"
+                  >
+                    Ativar
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Footer */}
             {notifications.length > 0 && (
-              <div className="p-3 border-t border-gray-200 bg-gray-50">
+              <div className="p-3 border-t border-gray-200 bg-white">
                 <button
                   onClick={() => {
                     setIsOpen(false);
