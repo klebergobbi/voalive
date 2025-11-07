@@ -63,6 +63,7 @@ services:
       - ./packages:/app/packages
       - /app/node_modules
       - /app/apps/api/node_modules
+      - ./.turbo:/app/.turbo
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,7 +71,7 @@ services:
         condition: service_healthy
     networks:
       - voalive-dev-network
-    command: npm run dev
+    command: sh -c "cd /app && npx turbo run dev --filter=@reservasegura/api"
 
   # VoaLive Web Frontend (Development)
   web:
@@ -94,12 +95,13 @@ services:
       - /app/node_modules
       - /app/apps/web/node_modules
       - /app/apps/web/.next
+      - ./.turbo:/app/.turbo
     depends_on:
       - api
       - postgres
     networks:
       - voalive-dev-network
-    command: npm run dev
+    command: sh -c "cd /app/apps/web && /app/node_modules/.bin/next dev -p 3003 -H 0.0.0.0"
 
   # PgAdmin (Development Tool)
   pgadmin:

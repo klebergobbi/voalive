@@ -1,0 +1,17 @@
+{
+  "bookingCode": "MSFHQJ",
+  "lastName": "CORTES",
+  "firstName": "MARIA",
+  "fullName": "Maria Cortes",
+  "airline": "GOL",
+  "flightNumber": "G31234",
+  "origin": "CNF",
+  "destination": "GRU",
+  "departureDate": "2025-12-15T10:00:00.000Z",
+  "arrivalDate": "2025-12-15T11:30:00.000Z",
+  "seat": "12A",
+  "class": "Econômica",
+  "email": "maria.cortes@example.com",
+  "phone": "+55 31 99999-7777",
+  "source": "MANUAL"
+}

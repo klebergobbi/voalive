@@ -1,0 +1,22 @@
+{
+  "bookingCode": "PDCDX",
+  "lastName": "DINIZ",
+  "firstName": "TESTE",
+  "fullName": "TESTE DINIZ",
+  "airline": "GOL",
+  "flightNumber": "G31234",
+  "origin": "SLZ",
+  "destination": "GRU",
+  "departureDate": "2025-11-15T10:30:00.000Z",
+  "arrivalDate": "2025-11-15T14:00:00.000Z",
+  "seat": "12A",
+  "class": "ECONOMY",
+  "gate": "5",
+  "terminal": "2",
+  "checkInStatus": "NOT_AVAILABLE",
+  "bookingStatus": "CONFIRMED",
+  "email": "teste@voalive.com",
+  "phone": "+5598912345678",
+  "document": "12345678900",
+  "source": "MANUAL_TEST"
+}

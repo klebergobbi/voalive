@@ -19,10 +19,12 @@ import { bookingRoutes } from './routes/booking.routes';
 import { transactionRoutes } from './routes/transaction.routes';
 import bookingMonitorRoutes from './routes/booking-monitor.routes';
 import externalBookingRoutes from './routes/external-booking.routes';
+import notificationRoutes from './routes/notification.routes';
 import { getFlightScraperService } from './services/flight-scraper.service';
 import { metricsMiddleware, prometheusMetricsHandler, jsonMetricsHandler } from './middlewares/metrics.middleware';
 import { getHealthMonitorService } from './services/health-monitor.service';
 import { getBookingMonitorService } from './services/booking-monitor.service';
+import { getSimpleBookingMonitorService } from './services/simple-booking-monitor.service';
 
 // Flight Monitoring (NEW)
 import flightsRoutes from './routes/flights.routes';
@@ -30,9 +32,46 @@ import flightMonitoringCacheRoutes from './routes/flight-monitoring-cache-routes
 import { getFlightMonitoringService } from './services/flightMonitoring';
 import { initializeFlightWebSocket } from './websockets/flightWebSocket';
 
+// Sistema de Monitoramento de Reservas Aéreas (Playwright + BullMQ)
+import airlineMonitoringRoutes from './routes/airline-monitoring.routes';
+import { initializeMonitoringSystem, shutdownMonitoringSystem } from './initialize-monitoring';
+
+// Sistema de Monitoramento 24/7 (Worker BullMQ + Node-Cron + HTTP)
+import monitoringRoutes from './routes/monitoring.routes';
+import { initializeFlightMonitoring, shutdownFlightMonitoring } from './workers/flight-monitoring.worker';
+
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 4000;
+
+// Helper function to parse REDIS_URL
+const parseRedisUrl = (url: string) => {
+  // redis://:password@host:port
+  const match = url.match(/redis:\/\/:?([^@]*)@([^:]+):(\d+)/);
+  if (match) {
+    return {
+      host: match[2],
+      port: parseInt(match[3], 10),
+      password: match[1] || undefined,
+    };
+  }
+  return {
+    host: 'localhost',
+    port: 6379,
+    password: undefined,
+  };
+};
+
+const getRedisConfig = () => {
+  if (process.env.REDIS_URL) {
+    return parseRedisUrl(process.env.REDIS_URL);
+  }
+  return {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379'),
+    password: process.env.REDIS_PASSWORD,
+  };
+};
 
 app.use(helmet());
 app.use(cors());
@@ -93,8 +132,18 @@ app.use('/api/v1/airline-booking', airlineBookingRoutes);
 app.use('/api/v1/flight-search', flightSearchRoutes);
 app.use('/api/v2/booking-monitor', bookingMonitorRoutes);
 app.use('/api/v2/external-booking', externalBookingRoutes);
+
+// Sistema de Monitoramento de Reservas Aéreas (Production-Ready)
+app.use('/api/airline-monitoring', airlineMonitoringRoutes);
+console.log('✅ Sistema de Monitoramento de Reservas Aéreas (Playwright + BullMQ) carregado');
+app.use('/api/notifications', notificationRoutes);
 console.log('✅ Sistema de monitoramento avançado de reservas carregado');
 console.log('✅ Sistema de reservas externas (Modelo CVC) carregado');
+console.log('✅ Sistema de notificações carregado');
+
+// Sistema de Monitoramento 24/7 (Worker BullMQ + Node-Cron + HTTP)
+app.use('/api/monitoring', monitoringRoutes);
+console.log('✅ Sistema de Monitoramento 24/7 (3 camadas de redundância) carregado');
 
 // ============================================================================
 // FLIGHT MONITORING SYSTEM (NEW)
@@ -104,9 +153,7 @@ try {
 
   // Initialize Redis
   const redis = new Redis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD,
+    ...getRedisConfig(),
     retryStrategy: (times) => {
       const delay = Math.min(times * 50, 2000);
       return delay;
@@ -123,11 +170,7 @@ try {
 
   // Initialize Bull Queue
   const monitoringQueue = new Queue('flight-monitoring', {
-    redis: {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379'),
-      password: process.env.REDIS_PASSWORD,
-    },
+    redis: getRedisConfig(),
   });
 
   // Initialize FlightMonitoringService
@@ -225,6 +268,7 @@ process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully...');
   const scraperService = getFlightScraperService();
   await scraperService.cleanup();
+  await shutdownFlightMonitoring();
   process.exit(0);
 });
 
@@ -232,6 +276,7 @@ process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully...');
   const scraperService = getFlightScraperService();
   await scraperService.cleanup();
+  await shutdownFlightMonitoring();
   process.exit(0);
 });
 
@@ -241,6 +286,27 @@ server.listen(PORT, () => {
   console.log(`📖 API docs: http://localhost:${PORT}/`);
   console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
   console.log(`📦 Reservas API: http://localhost:${PORT}/api/reservas/companhias`);
+
+  // Iniciar monitoramento automático de reservas
+  setTimeout(() => {
+    try {
+      const simpleMonitor = getSimpleBookingMonitorService();
+      simpleMonitor.startMonitoring();
+      console.log('✅ [Startup] Simple Booking Monitor iniciado automaticamente');
+    } catch (error) {
+      console.error('❌ [Startup] Falha ao iniciar Simple Booking Monitor:', error);
+    }
+  }, 3000);
+
+  // 🚀 Iniciar Sistema de Monitoramento 24/7 automaticamente
+  setTimeout(() => {
+    try {
+      initializeFlightMonitoring();
+      console.log('✅ [Startup] Sistema de Monitoramento 24/7 iniciado automaticamente');
+    } catch (error) {
+      console.error('❌ [Startup] Falha ao iniciar Sistema de Monitoramento 24/7:', error);
+    }
+  }, 5000); // Aguarda 5 segundos para garantir que Redis e Banco estejam prontos
 
   // Optionally start the scheduler on server startup
   if (process.env.AUTO_START_SCRAPER === 'true') {

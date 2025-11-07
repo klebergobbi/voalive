@@ -53,6 +53,15 @@ export function BookingRegisterModal({ isOpen, onClose, onSuccess }: BookingRegi
         searchPayload.origin = origem.trim().toUpperCase();
       }
 
+      // Incluir localizador e lastName para habilitar scraping de companhias aéreas
+      // Isso permite buscar voos domésticos brasileiros (LATAM, GOL, Azul)
+      if (localizador.trim()) {
+        searchPayload.localizador = localizador.trim().toUpperCase();
+      }
+      if (ultimoNome.trim()) {
+        searchPayload.lastName = ultimoNome.trim().toUpperCase();
+      }
+
       const response = await fetch(`${apiUrl}/api/v1/flight-search/search`, {
         method: 'POST',
         headers: {

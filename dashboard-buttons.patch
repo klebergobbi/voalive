@@ -1,0 +1,13 @@
+744a745,751
+>               <button
+>                 onClick={() => window.location.href = '/profile'}
+>                 className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 flex items-center gap-2 shadow-md transition-all"
+>               >
+>                 <User className="w-4 h-4" />
+>                 Perfil
+>               </button>
+749c756
+<                 🚪 Sair
+---
+>                 <LogOut className="w-4 h-4" />
+>                 Sair

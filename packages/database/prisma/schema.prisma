@@ -291,31 +291,42 @@ model BookingChange {
 
 model Notification {
   id        String          @id @default(cuid())
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
+  user      User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String?
   monitor   BookingMonitor? @relation(fields: [monitorId], references: [id], onDelete: Cascade)
   monitorId String?
 
-  type    String
-  title   String
-  message String
-  data    String?
+  // Link para external booking (para notificações de scraping)
+  bookingCode String?
 
-  sendEmail Boolean @default(true)
-  sendPush  Boolean @default(true)
+  type     String
+  title    String
+  message  String
+  data     String?
+  metadata String? // JSON com dados adicionais (airline, failureCount, etc)
+
+  // URL para ação (ex: verificar no site da companhia)
+  actionUrl String?
+
+  sendEmail Boolean @default(false)
+  sendPush  Boolean @default(false)
   sendSMS   Boolean @default(false)
 
   status String    @default("PENDING")
+  read   Boolean   @default(false)
   sentAt DateTime?
   readAt DateTime?
 
-  priority String @default("NORMAL")
+  priority String @default("NORMAL") // LOW, MEDIUM, HIGH, URGENT
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([bookingCode])
   @@index([status])
+  @@index([read])
+  @@index([priority])
   @@index([createdAt])
 }
 
@@ -365,6 +376,8 @@ model ExternalBooking {
   lastUpdated       DateTime  @default(now())
   lastChecked       DateTime? // Última verificação automática
   autoUpdate        Boolean   @default(false) // Habilitar atualização automática
+  scrapingFailures  Int       @default(0) // Contador de falhas de scraping
+  lastScrapingError String?   // Última mensagem de erro do scraping
 
   // Dados brutos (JSON)
   rawData           String?   // Dados originais em JSON

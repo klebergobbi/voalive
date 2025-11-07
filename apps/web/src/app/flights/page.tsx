@@ -6,7 +6,6 @@ import { FlightTable } from '../../components/dashboard/flight-table';
 import { FlightFilters } from '../../components/dashboard/flight-filters';
 import { FloatingActionButton } from '../../components/dashboard/floating-action-button';
 import { FlightFormModal } from '../../components/dashboard/flight-form-modal';
-import { FlightMonitor } from '../../components/dashboard/flight-monitor';
 import { BookingSearchModal } from '../../components/dashboard/booking-search-modal';
 import { FlightSearchModal } from '../../components/dashboard/flight-search-modal';
 import { AutoFillFlightForm } from '../../components/dashboard/auto-fill-flight-form';
@@ -22,7 +21,6 @@ export default function DashboardPage() {
   const [selectedAirline, setSelectedAirline] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFlight, setEditingFlight] = useState<Flight | null>(null);
-  const [showMonitor, setShowMonitor] = useState(false);
   const [showBookingSearch, setShowBookingSearch] = useState(false);
   const [showFlightSearch, setShowFlightSearch] = useState(false);
   const [showAutoFillForm, setShowAutoFillForm] = useState(false);
@@ -205,29 +203,6 @@ export default function DashboardPage() {
     }
   };
 
-  const handleFlightFound = (scrapedData: any) => {
-    // Add scraped flight data to the list
-    if (scrapedData && scrapedData.flights) {
-      const newFlights = scrapedData.flights.map((flight: any, index: number) => ({
-        id: `scraped_${Date.now()}_${index}`,
-        flightNumber: flight.flightNumber || '',
-        origin: flight.origin || '',
-        destination: flight.destination || '',
-        departureTime: new Date(flight.departureTime || Date.now()),
-        arrivalTime: new Date(flight.arrivalTime || Date.now()),
-        airline: flight.airline || '',
-        aircraft: flight.aircraft || 'N/A',
-        status: flight.status || 'SCHEDULED',
-        checkInStatus: flight.checkInStatus || 'NOT_AVAILABLE',
-        locator: flight.locator,
-        passengerFirstName: flight.passengerFirstName,
-        passengerLastName: flight.passengerLastName,
-      }));
-
-      setFlights(prev => [...newFlights, ...prev]);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       {isLoading && (
@@ -244,7 +219,13 @@ export default function DashboardPage() {
       <div className="bg-white border-b">
         <div className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">Gestão de Voos</h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-2xl font-bold">Gestão de Voos</h1>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-green-700">Monitoramento Ativo 24/7</span>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={handleSearchFlight}
@@ -252,12 +233,6 @@ export default function DashboardPage() {
               >
                 <span>✈️</span>
                 Buscar Vôo
-              </button>
-              <button
-                onClick={() => setShowMonitor(!showMonitor)}
-                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-              >
-                {showMonitor ? 'Ocultar Monitor' : 'Mostrar Monitor'}
               </button>
             </div>
           </div>
@@ -270,13 +245,6 @@ export default function DashboardPage() {
       </div>
 
       <div className="container mx-auto px-6 space-y-6">
-        {showMonitor && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold mb-4">Monitoramento de Voos Online</h2>
-            <FlightMonitor onFlightFound={handleFlightFound} />
-          </div>
-        )}
-
         <FlightFilters
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}

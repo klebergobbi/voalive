@@ -20,7 +20,7 @@ router.use(authMiddleware);
 router.post('/connect-account', async (req, res) => {
   try {
     const { airline, email, password } = req.body;
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
 
     if (!airline || !email || !password) {
       return res.status(400).json({
@@ -129,7 +129,7 @@ router.post('/sync/:accountId', async (req, res) => {
  */
 router.get('/accounts', async (req, res) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
     const { PrismaClient } = await import('@reservasegura/database');
     const prisma = new PrismaClient();
 
@@ -171,7 +171,7 @@ router.get('/accounts', async (req, res) => {
  */
 router.get('/bookings', async (req, res) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
     const { PrismaClient } = await import('@reservasegura/database');
     const prisma = new PrismaClient();
 
@@ -220,11 +220,11 @@ router.get('/bookings', async (req, res) => {
  */
 router.get('/notifications', async (req, res) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
     const { PrismaClient } = await import('@reservasegura/database');
     const prisma = new PrismaClient();
 
-    const notifications = await prisma.bookingNotification.findMany({
+    const notifications = await prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50
@@ -250,7 +250,7 @@ router.get('/notifications', async (req, res) => {
  */
 router.get('/changes', async (req, res) => {
   try {
-    const userId = (req as any).user.id;
+    const userId = (req as any).userId;
     const { PrismaClient } = await import('@reservasegura/database');
     const prisma = new PrismaClient();
 

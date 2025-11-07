@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, Button, Input, Label } from '@reservasegura/ui';
-import { Search, Plane, Loader2 } from 'lucide-react';
+import { Search, Plane, Loader2, Save } from 'lucide-react';
 
 interface FlightData {
   numeroVoo: string;
@@ -43,11 +44,13 @@ interface FlightSearchModalProps {
 }
 
 export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightSearchModalProps) {
+  const router = useRouter();
   const [flightNumber, setFlightNumber] = useState('');
   const [localizador, setLocalizador] = useState('');
   const [ultimoNome, setUltimoNome] = useState('');
   const [origem, setOrigem] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [flightInfo, setFlightInfo] = useState<FlightData | null>(null);
 
@@ -85,51 +88,150 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
     setFlightInfo(null);
 
     try {
-      console.log('🔍 Buscando vôo real:', flightNumber);
-
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-      const searchData: any = {
-        flightNumber: flightNumber.trim().toUpperCase()
-      };
 
-      // Adiciona campos extras se preenchidos
-      if (localizador.trim()) searchData.localizador = localizador.trim().toUpperCase();
-      if (ultimoNome.trim()) searchData.ultimoNome = ultimoNome.trim().toUpperCase();
-      if (origem.trim()) searchData.origem = origem.trim().toUpperCase();
+      // LÓGICA HÍBRIDA:
+      // Se tiver localizador + sobrenome → usa endpoint de scraping (Playwright)
+      // Se tiver apenas número de vôo → usa endpoint de APIs externas
+      const hasBookingInfo = localizador.trim() && ultimoNome.trim();
 
-      const response = await fetch(`${apiUrl}/api/v1/flight-search/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(searchData),
-      });
+      if (hasBookingInfo) {
+        // Busca usando LOCALIZADOR + SOBRENOME (Scraping com Playwright)
+        console.log('🔍 Buscando reserva com localizador:', localizador);
 
-      const result = await response.json();
+        const response = await fetch(`${apiUrl}/api/v1/airline-booking/search-booking`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            localizador: localizador.trim().toUpperCase(),
+            sobrenome: ultimoNome.trim().toUpperCase(),
+            origem: origem.trim().toUpperCase() || undefined,
+          }),
+        });
 
-      if (result.success && result.data) {
-        console.log('✅ Vôo encontrado:', result.data);
-        setFlightInfo(result.data);
-        onFlightFound(result.data);
+        const result = await response.json();
 
-        // Close modal after 1 second to show success
-        setTimeout(() => {
-          onOpenChange(false);
-          setFlightNumber('');
-          setLocalizador('');
-          setUltimoNome('');
-          setOrigem('');
-          setFlightInfo(null);
-        }, 1500);
+        if (result.success && result.data) {
+          console.log('✅ Reserva encontrada:', result.data);
+
+          // Mapear dados da reserva para formato esperado pelo modal
+          const flightData = {
+            numeroVoo: result.data.numeroVoo || flightNumber.trim().toUpperCase(),
+            origem: result.data.origem || '',
+            destino: result.data.destino || '',
+            horarioPartida: result.data.horarioPartida || '',
+            horarioChegada: result.data.horarioChegada || '',
+            dataPartida: result.data.dataPartida || new Date().toISOString().split('T')[0],
+            status: result.data.status || 'CONFIRMED',
+            companhia: result.data.companhia || getAirlineFromCode(flightNumber),
+            portao: result.data.portao,
+            terminal: result.data.terminal,
+            aeronave: result.data.aeronave,
+          };
+
+          setFlightInfo(flightData);
+          // NÃO chamar onFlightFound nem fechar o modal automaticamente
+          // Esperar o usuário clicar em "Salvar"
+        } else {
+          setError(result.message || result.error || 'Reserva não encontrada. Verifique os dados e tente novamente.');
+          console.warn('⚠️ Reserva não encontrada:', result);
+        }
       } else {
-        setError(result.error || 'Vôo não encontrado. Verifique o número e tente novamente.');
-        console.warn('⚠️ Vôo não encontrado:', result);
+        // Busca usando NÚMERO DE VÔO (APIs externas: AirLabs, etc)
+        console.log('🔍 Buscando vôo por número:', flightNumber);
+
+        const response = await fetch(`${apiUrl}/api/v1/flight-search/search`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            flightNumber: flightNumber.trim().toUpperCase()
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.data) {
+          console.log('✅ Vôo encontrado:', result.data);
+          setFlightInfo(result.data);
+          // NÃO chamar onFlightFound nem fechar o modal automaticamente
+          // Esperar o usuário clicar em "Salvar"
+        } else {
+          setError(result.error || 'Vôo não encontrado. Verifique o número e tente novamente.');
+          console.warn('⚠️ Vôo não encontrado:', result);
+        }
       }
     } catch (error: any) {
       console.error('❌ Erro na busca:', error);
       setError(`Erro ao buscar vôo: ${error.message || 'Verifique sua conexão'}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /**
+   * Salva a reserva para monitoramento e redireciona para /bookings
+   */
+  const handleSave = async () => {
+    if (!flightInfo) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+      console.log('💾 Salvando reserva para monitoramento...');
+
+      const response = await fetch(`${apiUrl}/api/monitoring/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          pnr: localizador.toUpperCase() || `AUTO-${flightInfo.numeroVoo}-${Date.now()}`,
+          airline: flightInfo.companhia || getAirlineFromCode(flightInfo.numeroVoo),
+          lastName: ultimoNome.toUpperCase() || 'AUTO',
+          flightNumber: flightInfo.numeroVoo,
+          departureDate: flightInfo.dataPartida ? new Date(flightInfo.dataPartida) : new Date(),
+          route: `${flightInfo.origem}-${flightInfo.destino}`,
+          checkInterval: 5, // Verificar a cada 5 minutos
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('✅ Reserva salva com sucesso!');
+
+        // Chamar callback com os dados do voo
+        onFlightFound(flightInfo);
+
+        // Fechar modal
+        onOpenChange(false);
+
+        // Limpar campos
+        setFlightNumber('');
+        setLocalizador('');
+        setUltimoNome('');
+        setOrigem('');
+        setFlightInfo(null);
+        setError('');
+
+        // Redirecionar para página de reservas
+        router.push('/bookings');
+      } else {
+        setError(result.message || 'Erro ao salvar reserva para monitoramento');
+        console.error('❌ Erro ao salvar reserva:', result);
+      }
+    } catch (error: any) {
+      console.error('❌ Erro ao salvar reserva:', error);
+      setError(`Erro ao salvar: ${error.message || 'Tente novamente'}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -195,7 +297,7 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
         <form onSubmit={handleSearch} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="flightNumber">
-              Número do Vôo {isGol(flightNumber) && <span className="text-red-600">*</span>}
+              Número do Vôo <span className="text-red-600">*</span>
             </Label>
             <div className="relative">
               <Input
@@ -220,11 +322,12 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
             </div>
           </div>
 
-          {/* Campos adicionais - obrigatórios para GOL */}
+          {/* Campos adicionais - obrigatórios para GOL, recomendados para LATAM */}
           <div className="grid grid-cols-1 gap-3">
             <div className="space-y-2">
               <Label htmlFor="localizador">
                 Localizador {isGol(flightNumber) && <span className="text-red-600">*</span>}
+                {!isGol(flightNumber) && flightNumber.trim() && <span className="text-gray-500 text-xs ml-1">(recomendado)</span>}
               </Label>
               <Input
                 id="localizador"
@@ -233,8 +336,8 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
                   setLocalizador(e.target.value.toUpperCase());
                   setError('');
                 }}
-                placeholder="Ex: ABC123"
-                maxLength={6}
+                placeholder="Ex: 0JOCXW, ABC123"
+                maxLength={8}
                 className="font-mono"
                 disabled={loading}
                 required={isGol(flightNumber)}
@@ -244,6 +347,7 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
             <div className="space-y-2">
               <Label htmlFor="ultimoNome">
                 Último Nome {isGol(flightNumber) && <span className="text-red-600">*</span>}
+                {!isGol(flightNumber) && flightNumber.trim() && <span className="text-gray-500 text-xs ml-1">(recomendado)</span>}
               </Label>
               <Input
                 id="ultimoNome"
@@ -252,7 +356,7 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
                   setUltimoNome(e.target.value.toUpperCase());
                   setError('');
                 }}
-                placeholder="Ex: SILVA"
+                placeholder="Ex: JUNIOR, SILVA"
                 className="font-mono"
                 disabled={loading}
                 required={isGol(flightNumber)}
@@ -262,6 +366,7 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
             <div className="space-y-2">
               <Label htmlFor="origem">
                 Origem (IATA) {isGol(flightNumber) && <span className="text-red-600">*</span>}
+                {!isGol(flightNumber) && flightNumber.trim() && <span className="text-gray-500 text-xs ml-1">(recomendado)</span>}
               </Label>
               <Input
                 id="origem"
@@ -270,7 +375,7 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
                   setOrigem(e.target.value.toUpperCase());
                   setError('');
                 }}
-                placeholder="Ex: GRU, CGH, SDU"
+                placeholder="Ex: POA, GRU, CGH"
                 maxLength={3}
                 minLength={3}
                 className="font-mono"
@@ -285,6 +390,15 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
               <p className="text-sm text-yellow-800">
                 <strong>Voos GOL:</strong> É necessário informar o Localizador, Último Nome e Origem para realizar a busca.
+              </p>
+            </div>
+          )}
+
+          {/* Alerta para LATAM/outras companhias */}
+          {!isGol(flightNumber) && flightNumber.trim() && flightNumber.length >= 4 && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>💡 Dica:</strong> Para obter dados mais precisos da sua reserva LATAM, preencha também o Localizador e Último Nome. Isso permitirá buscar informações diretamente do site da companhia aérea.
               </p>
             </div>
           )}
@@ -479,27 +593,50 @@ export function FlightSearchModal({ open, onOpenChange, onFlightFound }: FlightS
                 setError('');
                 setFlightInfo(null);
               }}
-              disabled={loading}
+              disabled={loading || saving}
             >
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={flightNumber.length < 4 || loading}
-              className="min-w-24"
-            >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Buscando...
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Search className="h-4 w-4" />
-                  Buscar
-                </div>
-              )}
-            </Button>
+
+            {/* Mostrar "Buscar" quando não houver resultados, "Salvar" quando houver */}
+            {!flightInfo ? (
+              <Button
+                type="submit"
+                disabled={flightNumber.length < 4 || loading}
+                className="min-w-24"
+              >
+                {loading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Buscando...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Search className="h-4 w-4" />
+                    Buscar
+                  </div>
+                )}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="min-w-24 bg-green-600 hover:bg-green-700"
+              >
+                {saving ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Salvando...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Save className="h-4 w-4" />
+                    Salvar
+                  </div>
+                )}
+              </Button>
+            )}
           </div>
         </form>
       </DialogContent>

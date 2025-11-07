@@ -1,0 +1,178 @@
+/**
+ * Queue Manager
+ * Gerenciador de filas BullMQ
+ */
+
+import { Queue, QueueEvents } from 'bullmq';
+import IORedis from 'ioredis';
+import { Logger } from '../utils/logger.util';
+import { createBookingMonitorWorker } from './booking-monitor.processor';
+import { getAirlineMonitoringService } from '../services/airline-monitoring.service';
+
+const logger = new Logger('QueueManager');
+
+export class QueueManager {
+  private connection: IORedis;
+  private bookingMonitorQueue: Queue | null = null;
+  private queueEvents: QueueEvents | null = null;
+  private worker: any = null;
+
+  constructor() {
+    // Configurar conexão Redis
+    const redisHost = process.env.REDIS_HOST || 'localhost';
+    const redisPort = parseInt(process.env.REDIS_PORT || '6379');
+
+    logger.info(`Conectando ao Redis: ${redisHost}:${redisPort}`);
+
+    this.connection = new IORedis({
+      host: redisHost,
+      port: redisPort,
+      maxRetriesPerRequest: null,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+    });
+
+    this.connection.on('connect', () => {
+      logger.info('Conectado ao Redis');
+    });
+
+    this.connection.on('error', (error) => {
+      logger.error('Erro no Redis:', error.message);
+    });
+  }
+
+  /**
+   * Inicializa as filas
+   */
+  async initialize(): Promise<void> {
+    logger.info('Inicializando filas...');
+
+    // Criar fila de monitoramento
+    this.bookingMonitorQueue = new Queue('booking-monitor', {
+      connection: this.connection,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: {
+          age: 24 * 3600, // Manter por 24 horas
+          count: 1000, // Ou até 1000 jobs
+        },
+        removeOnFail: {
+          age: 7 * 24 * 3600, // Manter por 7 dias
+        },
+      },
+    });
+
+    // Configurar eventos da fila
+    this.queueEvents = new QueueEvents('booking-monitor', {
+      connection: this.connection,
+    });
+
+    this.queueEvents.on('completed', ({ jobId }) => {
+      logger.info(`Job ${jobId} concluído`);
+    });
+
+    this.queueEvents.on('failed', ({ jobId, failedReason }) => {
+      logger.error(`Job ${jobId} falhou: ${failedReason}`);
+    });
+
+    // Criar worker
+    this.worker = createBookingMonitorWorker(this.connection);
+
+    // Injetar fila no serviço de monitoramento
+    const monitoringService = getAirlineMonitoringService();
+    monitoringService.setQueue(this.bookingMonitorQueue);
+
+    logger.info('Filas inicializadas com sucesso');
+  }
+
+  /**
+   * Retorna a fila de monitoramento
+   */
+  getBookingMonitorQueue(): Queue {
+    if (!this.bookingMonitorQueue) {
+      throw new Error('Fila não inicializada. Chame initialize() primeiro.');
+    }
+    return this.bookingMonitorQueue;
+  }
+
+  /**
+   * Obtém estatísticas da fila
+   */
+  async getQueueStats(): Promise<any> {
+    if (!this.bookingMonitorQueue) {
+      return null;
+    }
+
+    const [waiting, active, completed, failed, delayed] = await Promise.all([
+      this.bookingMonitorQueue.getWaitingCount(),
+      this.bookingMonitorQueue.getActiveCount(),
+      this.bookingMonitorQueue.getCompletedCount(),
+      this.bookingMonitorQueue.getFailedCount(),
+      this.bookingMonitorQueue.getDelayedCount(),
+    ]);
+
+    return {
+      waiting,
+      active,
+      completed,
+      failed,
+      delayed,
+      total: waiting + active + completed + failed + delayed,
+    };
+  }
+
+  /**
+   * Limpa jobs antigos
+   */
+  async cleanQueue(): Promise<void> {
+    if (!this.bookingMonitorQueue) {
+      return;
+    }
+
+    logger.info('Limpando jobs antigos...');
+
+    await this.bookingMonitorQueue.clean(24 * 3600 * 1000, 1000, 'completed');
+    await this.bookingMonitorQueue.clean(7 * 24 * 3600 * 1000, 100, 'failed');
+
+    logger.info('Limpeza concluída');
+  }
+
+  /**
+   * Fecha todas as conexões
+   */
+  async close(): Promise<void> {
+    logger.info('Fechando filas...');
+
+    if (this.worker) {
+      await this.worker.close();
+    }
+
+    if (this.queueEvents) {
+      await this.queueEvents.close();
+    }
+
+    if (this.bookingMonitorQueue) {
+      await this.bookingMonitorQueue.close();
+    }
+
+    await this.connection.quit();
+
+    logger.info('Filas fechadas');
+  }
+}
+
+// Singleton
+let queueManager: QueueManager;
+
+export function getQueueManager(): QueueManager {
+  if (!queueManager) {
+    queueManager = new QueueManager();
+  }
+  return queueManager;
+}

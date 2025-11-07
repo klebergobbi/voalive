@@ -55,6 +55,21 @@ export interface MonitorOptions {
 }
 
 /**
+ * Estratégias de retry inteligente para GOL
+ */
+interface RetryStrategy {
+  nome: string;
+  delayExtra?: number;
+  usarProxy?: boolean;
+}
+
+const ESTRATEGIAS_RETRY: RetryStrategy[] = [
+  { nome: 'Stealth Mode Padrão' },
+  { nome: 'Delay Extra', delayExtra: 5000 },
+  { nome: 'Delay Máximo', delayExtra: 10000 },
+];
+
+/**
  * Monitora uma reserva aérea com retry e timeout
  * @param {MonitorOptions} options - Opções de monitoramento
  * @returns {Promise<ReservaData>}
@@ -80,6 +95,77 @@ export async function monitorarReserva(options: MonitorOptions): Promise<Reserva
   let ultimoErro: Error | null = null;
   let tentativas = 0;
 
+  // RETRY INTELIGENTE: Para GOL, usa estratégias diferentes
+  if (companhiaAerea === 'GOL' && retries >= ESTRATEGIAS_RETRY.length) {
+    console.log(`[Scraper Service] 🎯 Usando RETRY INTELIGENTE para GOL`);
+
+    for (const estrategia of ESTRATEGIAS_RETRY) {
+      tentativas++;
+
+      console.log(`[Scraper Service] 🔄 Tentativa ${tentativas}/${ESTRATEGIAS_RETRY.length}: ${estrategia.nome}`);
+
+      try {
+        // Delay extra antes da tentativa
+        if (estrategia.delayExtra) {
+          console.log(`[Scraper Service] ⏱️  Aguardando ${estrategia.delayExtra}ms extra...`);
+          await new Promise((resolve) => setTimeout(resolve, estrategia.delayExtra));
+        }
+
+        const resultado = await executarScrapingComTimeout(
+          {
+            codigoReserva,
+            email,
+            senha,
+            companhiaAerea,
+            proxy: estrategia.usarProxy ? proxy : null,
+          },
+          timeout
+        );
+
+        console.log(
+          `[Scraper Service] ✅ Sucesso com estratégia: ${estrategia.nome} (tentativa ${tentativas})`
+        );
+
+        return resultado;
+      } catch (error) {
+        ultimoErro = error as Error;
+        console.warn(
+          `[Scraper Service] ❌ Estratégia "${estrategia.nome}" falhou:`,
+          (error as Error).message
+        );
+
+        // Não tenta novamente em casos específicos
+        if (
+          error instanceof CaptchaError ||
+          error instanceof TwoFAError
+        ) {
+          throw error;
+        }
+
+        // Exponential backoff entre estratégias
+        if (tentativas < ESTRATEGIAS_RETRY.length) {
+          const delay = Math.pow(2, tentativas) * 1000; // 2s, 4s, 8s
+          console.log(`[Scraper Service] ⏳ Aguardando ${delay}ms antes da próxima estratégia...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // Se chegou aqui, todas as estratégias falharam
+    console.warn(`[Scraper Service] ⚠️ TODAS as estratégias falharam para ${codigoReserva}`);
+
+    throw new ScrapingError(
+      `Falha após ${ESTRATEGIAS_RETRY.length} estratégias inteligentes: ${ultimoErro?.message}`,
+      {
+        codigoReserva,
+        companhiaAerea,
+        erro: ultimoErro?.message,
+        estrategiasTentadas: ESTRATEGIAS_RETRY.map(e => e.nome)
+      }
+    );
+  }
+
+  // RETRY PADRÃO: Para outras companhias
   while (tentativas < retries) {
     tentativas++;
 

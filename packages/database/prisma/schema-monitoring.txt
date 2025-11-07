@@ -1,0 +1,179 @@
+// ========================================
+// SISTEMA DE MONITORAMENTO DE RESERVAS
+// ========================================
+// Adicione estes modelos ao schema.prisma principal
+
+// 1. Primeiro, adicione estas relações ao model User existente:
+//
+//   connectedAccounts     ConnectedAirlineAccount[]
+//   bookingMonitors       BookingMonitor[]
+//   notifications         Notification[]
+
+// 2. Depois adicione estes novos models:
+
+model ConnectedAirlineAccount {
+  id                String    @id @default(cuid())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  airline           String    // GOL, LATAM, AZUL
+  accountEmail      String
+  encryptedPassword String    // Senha criptografada com AES-256
+
+  // Sessão persistente
+  sessionCookies    String?   // JSON string - cookies da sessão
+  sessionToken      String?
+  sessionExpiresAt  DateTime?
+  lastLoginAt       DateTime?
+  loginAttempts     Int       @default(0)
+
+  // Status
+  isActive          Boolean   @default(true)
+  lastSyncAt        DateTime?
+  syncInterval      Int       @default(15) // minutos
+
+  // Configurações
+  autoMonitor       Boolean   @default(true)
+  notifyChanges     Boolean   @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  monitors          BookingMonitor[]
+
+  @@unique([userId, airline])
+  @@index([userId])
+  @@index([airline])
+}
+
+model BookingMonitor {
+  id                    String    @id @default(cuid())
+  account               ConnectedAirlineAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId             String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId                String
+
+  // Dados da reserva
+  bookingCode           String    // PNR/Localizador
+  airline               String    // GOL, LATAM, AZUL
+  passengerName         String
+
+  // Dados do voo atual
+  currentFlightNumber   String
+  currentOrigin         String
+  currentDestination    String
+  currentDepartureTime  DateTime
+  currentArrivalTime    DateTime?
+  currentSeat           String?
+  currentClass          String?
+  currentGate           String?
+  currentTerminal       String?
+  currentStatus         String    @default("ACTIVE") // ACTIVE, CANCELLED, COMPLETED, CHANGED
+
+  // Monitoramento
+  monitoringEnabled     Boolean   @default(true)
+  lastCheckedAt         DateTime?
+  nextCheckAt           DateTime?
+  checkInterval         Int       @default(15) // minutos
+  checksCount           Int       @default(0)
+
+  // Flags de mudança
+  hasChanges            Boolean   @default(false)
+  lastChangeDetectedAt  DateTime?
+  changesNotified       Boolean   @default(false)
+
+  // Dados brutos (snapshot)
+  rawData               String?   // JSON string - última captura completa
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  changes               BookingChange[]
+  notifications         Notification[]
+
+  @@unique([accountId, bookingCode])
+  @@index([userId])
+  @@index([bookingCode])
+  @@index([airline])
+  @@index([monitoringEnabled, nextCheckAt])
+}
+
+model BookingChange {
+  id                String    @id @default(cuid())
+  monitor           BookingMonitor @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitorId         String
+
+  // Tipo de mudança
+  changeType        String    // FLIGHT_CHANGED, TIME_CHANGED, SEAT_CHANGED, CANCELLED, GATE_CHANGED
+
+  // Valores anteriores
+  oldValue          String?   // JSON string
+  newValue          String?   // JSON string
+
+  // Detalhes específicos
+  oldFlightNumber   String?
+  newFlightNumber   String?
+  oldDepartureTime  DateTime?
+  newDepartureTime  DateTime?
+  oldSeat           String?
+  newSeat           String?
+  oldGate           String?
+  newGate           String?
+
+  // Metadados
+  detectedAt        DateTime  @default(now())
+  notified          Boolean   @default(false)
+  notifiedAt        DateTime?
+  severity          String    @default("INFO") // INFO, WARNING, CRITICAL
+
+  // Dados brutos da mudança
+  rawDataBefore     String?   // JSON string
+  rawDataAfter      String?   // JSON string
+
+  createdAt         DateTime  @default(now())
+
+  @@index([monitorId])
+  @@index([changeType])
+  @@index([detectedAt])
+}
+
+model Notification {
+  id                String    @id @default(cuid())
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId            String
+  monitor           BookingMonitor? @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+  monitorId         String?
+
+  // Conteúdo
+  type              String    // BOOKING_CHANGE, FLIGHT_CANCELLED, SEAT_CHANGED, etc
+  title             String
+  message           String
+  data              String?   // JSON string - dados adicionais
+
+  // Canais
+  sendEmail         Boolean   @default(true)
+  sendPush          Boolean   @default(true)
+  sendSMS           Boolean   @default(false)
+
+  // Status
+  status            String    @default("PENDING") // PENDING, SENT, FAILED, READ
+  sentAt            DateTime?
+  readAt            DateTime?
+
+  // Prioridade
+  priority          String    @default("NORMAL") // LOW, NORMAL, HIGH, URGENT
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Enums expandidos:
+// ChangeType: FLIGHT_CHANGED, TIME_CHANGED, SEAT_CHANGED, CANCELLED, GATE_CHANGED, TERMINAL_CHANGED, CLASS_CHANGED
+// NotificationType: BOOKING_CHANGE, FLIGHT_CANCELLED, SEAT_CHANGED, GATE_CHANGED, DELAY_ALERT, CHECK_IN_REMINDER
+// NotificationStatus: PENDING, SENT, FAILED, READ
+// Priority: LOW, NORMAL, HIGH, URGENT
+// Severity: INFO, WARNING, CRITICAL
+// BookingMonitorStatus: ACTIVE, CANCELLED, COMPLETED, CHANGED

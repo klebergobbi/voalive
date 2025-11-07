@@ -1,0 +1,17 @@
+{
+  "localizador": "TESTG31",
+  "sobrenome": "SILVA",
+  "origem": "REC",
+  "destino": "CGH",
+  "numeroVoo": "G31413",
+  "companhia": "GOL",
+  "dataPartida": "2025-11-07",
+  "horarioPartida": "10:55",
+  "horarioChegada": "14:25",
+  "passageiro": "JOAO SILVA",
+  "email": "joao.silva@teste.com",
+  "telefone": "+5581999887766",
+  "notificarWhatsapp": true,
+  "notificarEmail": true,
+  "observacoes": "Teste de voo real ativo - G31413 REC->CGH"
+}

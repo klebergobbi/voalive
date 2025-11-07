@@ -1,0 +1,20 @@
+--- Original após app.listen
++++ Com inicialização do monitoramento
+
+app.listen(PORT, () => {
+  console.log(`🚀 VoaLive API is running on http://localhost:${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`📖 API docs: http://localhost:${PORT}/`);
+
++  // Inicializar Sistema de Monitoramento
++  setTimeout(async () => {
++    try {
++      await initializeMonitoringSystem();
++      console.log('✅ Sistema de Monitoramento inicializado com sucesso');
++    } catch (error) {
++      console.error('❌ Erro ao inicializar Sistema de Monitoramento:', error);
++    }
++  }, 2000); // Wait 2 seconds after server start
+
+  // Optionally start the scheduler on server startup
+  if (process.env.AUTO_START_SCRAPER === 'true') {

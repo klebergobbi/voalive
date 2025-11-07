@@ -31,12 +31,34 @@ export const reservasEmitter = new EventEmitter();
 /**
  * Configuração da fila Bull
  */
+// Parse REDIS_URL se disponível
+const parseRedisUrl = (url: string) => {
+  // redis://:password@host:port
+  const match = url.match(/redis:\/\/:?([^@]*)@([^:]+):(\d+)/);
+  if (match) {
+    return {
+      host: match[2],
+      port: parseInt(match[3], 10),
+      password: match[1] || undefined,
+    };
+  }
+  return {
+    host: 'localhost',
+    port: 6379,
+    password: undefined,
+  };
+};
+
+const redisConfig = process.env.REDIS_URL
+  ? parseRedisUrl(process.env.REDIS_URL)
+  : {
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      password: process.env.REDIS_PASSWORD || undefined,
+    };
+
 const QUEUE_CONFIG = {
-  redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined,
-  },
+  redis: redisConfig,
   defaultJobOptions: {
     attempts: 3,
     backoff: {

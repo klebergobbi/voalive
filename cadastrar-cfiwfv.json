@@ -1,0 +1,17 @@
+{
+  "bookingCode": "CFIWFV",
+  "lastName": "SANTOS",
+  "firstName": "JOÃO",
+  "fullName": "João Santos",
+  "airline": "GOL",
+  "flightNumber": "G31890",
+  "origin": "CGH",
+  "destination": "GRU",
+  "departureDate": "2025-12-10T14:00:00.000Z",
+  "arrivalDate": "2025-12-10T14:45:00.000Z",
+  "seat": "18C",
+  "class": "Econômica",
+  "email": "joao.santos@example.com",
+  "phone": "+55 11 99999-8888",
+  "source": "MANUAL"
+}

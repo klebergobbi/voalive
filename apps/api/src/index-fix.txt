@@ -1,0 +1,10 @@
+  // Inicializar Sistema de Monitoramento
+  setTimeout(async () => {
+    try {
+      await initializeMonitoringSystem();
+      console.log('✅ Sistema de Monitoramento inicializado com sucesso');
+    } catch (error) {
+      console.error('❌ Erro ao inicializar Sistema de Monitoramento:', error);
+    }
+  }, 2000);
+

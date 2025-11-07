@@ -1,31 +1,73 @@
 import { Request, Response } from 'express';
 import { getRealFlightSearchService } from '../services/real-flight-search.service';
+import { getAmadeusAPIService } from '../services/amadeus-api.service';
 import { z } from 'zod';
 
 // Validation schema
 const searchFlightSchema = z.object({
   flightNumber: z.string().min(4).max(10).transform(val => val.toUpperCase().trim()),
   date: z.string().optional(),
+  origin: z.string().optional(),
+  localizador: z.string().optional(),
+  lastName: z.string().optional(),
 });
 
 export class FlightSearchController {
   private realFlightSearchService = getRealFlightSearchService();
+  private amadeusService = getAmadeusAPIService();
 
   /**
    * Search for real-time flight information by flight number
-   * Uses AirLabs, Aviationstack, and FlightRadar24 APIs
+   * Uses 3-layer hybrid approach:
+   * 1. Amadeus GDS API (official airline data)
+   * 2. AirLabs, Aviationstack, FlightRadar24 APIs (fallback)
+   * 3. Web scraping (last resort)
    */
   async searchFlight(req: Request, res: Response): Promise<void> {
     try {
-      const { flightNumber, date } = searchFlightSchema.parse(req.body);
+      const { flightNumber, date, origin, localizador, lastName } = searchFlightSchema.parse(req.body);
 
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`🔍 API - Busca de Vôo Real Iniciada`);
+      console.log(`🔍 API - Busca de Vôo Real Iniciada (Híbrida)`);
       console.log(`   Número: ${flightNumber}`);
       console.log(`   Data: ${date || 'Hoje'}`);
+      console.log(`   Origem: ${origin || 'N/A'}`);
+      console.log(`   PNR: ${localizador || 'N/A'}`);
+      console.log(`   Sobrenome: ${lastName || 'N/A'}`);
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-      // Search using real APIs (AirLabs → Aviationstack → FlightRadar24)
+      // LAYER 1: Try Amadeus GDS API first (official data)
+      console.log(`🔹 Camada 1: Tentando Amadeus GDS API...`);
+      try {
+        const amadeusResults = await this.amadeusService.searchFlightByNumber(flightNumber, date);
+
+        if (amadeusResults && amadeusResults.length > 0) {
+          console.log(`✅ Vôo encontrado via Amadeus GDS!`);
+          const amadeusData = this.amadeusService.convertToStandardFormat(amadeusResults[0]);
+
+          console.log(`   Origem: ${amadeusData.origem}`);
+          console.log(`   Destino: ${amadeusData.destino}`);
+          console.log(`   Status: ${amadeusData.status}`);
+          console.log(`   Fonte: Amadeus GDS (Oficial)`);
+          console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+          res.status(200).json({
+            success: true,
+            data: amadeusData,
+            source: 'amadeus',
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        } else {
+          console.log(`⚠️ Amadeus: Vôo não encontrado, tentando próxima camada...`);
+        }
+      } catch (amadeusError: any) {
+        console.log(`⚠️ Amadeus falhou: ${amadeusError.message}`);
+        console.log(`   Continuando para próxima camada...`);
+      }
+
+      // LAYER 2: Fallback to external APIs (AirLabs → Aviationstack → FlightRadar24)
+      console.log(`🔹 Camada 2: Tentando APIs externas (AirLabs, etc)...`);
       const flightData = await this.realFlightSearchService.searchRealFlightByNumber(flightNumber);
 
       if (flightData) {
@@ -84,7 +126,64 @@ export class FlightSearchController {
           timestamp: new Date().toISOString(),
         });
       } else {
-        console.log(`❌ Vôo não encontrado`);
+        // LAYER 3: Scraper-based search (for Brazilian airlines with PNR)
+        if (localizador && lastName) {
+          console.log(`🔹 Camada 3: Tentando scraping com PNR + Sobrenome...`);
+          console.log(`   PNR: ${localizador}, Sobrenome: ${lastName}`);
+
+          try {
+            // Detectar companhia aérea pelo flight number
+            const airline = this.detectAirlineFromFlightNumber(flightNumber);
+            console.log(`   Companhia detectada: ${airline}`);
+
+            let scrapedData: any = null;
+
+            // Tentar scraping específico da companhia
+            if (airline === 'LATAM') {
+              scrapedData = await this.realFlightSearchService.searchLatamBooking(localizador, lastName);
+            } else if (airline === 'GOL') {
+              scrapedData = await this.realFlightSearchService.searchGolBooking(localizador, lastName);
+            } else if (airline === 'AZUL') {
+              scrapedData = await this.realFlightSearchService.searchAzulBooking(localizador, lastName);
+            }
+
+            if (scrapedData) {
+              console.log(`✅ Vôo encontrado via scraping da ${airline}!`);
+              console.log(`   Origem: ${scrapedData.origem}`);
+              console.log(`   Destino: ${scrapedData.destino}`);
+              console.log(`   Voo: ${scrapedData.numeroVoo}`);
+              console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+
+              res.status(200).json({
+                success: true,
+                data: {
+                  numeroVoo: scrapedData.numeroVoo || flightNumber,
+                  origem: scrapedData.origem || '',
+                  destino: scrapedData.destino || '',
+                  horarioPartida: scrapedData.horarioPartida || '',
+                  horarioChegada: scrapedData.horarioChegada || '',
+                  dataPartida: scrapedData.dataPartida || new Date().toISOString().split('T')[0],
+                  status: scrapedData.status || 'Confirmado',
+                  companhia: scrapedData.companhia || airline,
+                  portao: scrapedData.portao || null,
+                  terminal: scrapedData.terminal || null,
+                  assento: scrapedData.assento || null,
+                  ultimaAtualizacao: new Date().toISOString(),
+                },
+                source: `${airline} Web Scraping`,
+                timestamp: new Date().toISOString(),
+              });
+              return;
+            } else {
+              console.log(`⚠️ Scraping não encontrou dados para ${airline}`);
+            }
+          } catch (scraperError: any) {
+            console.log(`⚠️ Erro no scraping: ${scraperError.message}`);
+            console.log(`   Continuando para mensagem de erro padrão...`);
+          }
+        }
+
+        console.log(`❌ Vôo não encontrado em nenhuma camada`);
         console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
         res.status(404).json({
@@ -96,6 +195,7 @@ export class FlightSearchController {
             'Certifique-se de que o vôo está operando hoje',
             'Tente novamente em alguns minutos',
             'Alguns vôos só operam em dias específicos da semana',
+            localizador && lastName ? 'Dados de PNR fornecidos mas reserva não encontrada' : 'Forneça o localizador (PNR) e sobrenome para buscar em companhias brasileiras',
           ],
         });
       }

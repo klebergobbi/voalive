@@ -1,0 +1,166 @@
+═══════════════════════════════════════════════════════════════════════════════
+INSTRUÇÕES DE INTEGRAÇÃO - Sistema de Monitoramento de Reservas Aéreas
+═══════════════════════════════════════════════════════════════════════════════
+
+IMPORTANTE: O arquivo index.ts foi modificado enquanto fazíamos as edições.
+Por favor, siga estas instruções manualmente:
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 1: Adicionar Importações
+═══════════════════════════════════════════════════════════════════════════════
+
+No arquivo: apps/api/src/index.ts
+
+APÓS a linha 33 (após as importações do Flight Monitoring), ADICIONE:
+
+// Sistema de Monitoramento de Reservas Aéreas (Playwright + BullMQ)
+import airlineMonitoringRoutes from './routes/airline-monitoring.routes';
+import { initializeMonitoringSystem, shutdownMonitoringSystem } from './initialize-monitoring';
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 2: Registrar Rotas
+═══════════════════════════════════════════════════════════════════════════════
+
+APÓS a linha 130 (após as outras rotas app.use), ADICIONE:
+
+// Sistema de Monitoramento de Reservas Aéreas (Production-Ready)
+app.use('/api/monitoring', airlineMonitoringRoutes);
+console.log('✅ Sistema de Monitoramento de Reservas Aéreas (Playwright + BullMQ) carregado');
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 3: Atualizar Graceful Shutdown
+═══════════════════════════════════════════════════════════════════════════════
+
+SUBSTITUIR as linhas 251-263 (process.on SIGTERM e SIGINT) POR:
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  await shutdownMonitoringSystem();
+  const scraperService = getFlightScraperService();
+  await scraperService.cleanup();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  await shutdownMonitoringSystem();
+  const scraperService = getFlightScraperService();
+  await scraperService.cleanup();
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 4: Inicializar Sistema no Startup
+═══════════════════════════════════════════════════════════════════════════════
+
+Na linha 265, ALTERAR de:
+
+server.listen(PORT, () => {
+
+PARA:
+
+server.listen(PORT, async () => {
+
+
+DEPOIS, APÓS a linha 270 (após os console.logs iniciais), ADICIONE:
+
+  // Inicializar Sistema de Monitoramento de Reservas Aéreas
+  try {
+    await initializeMonitoringSystem();
+  } catch (error) {
+    console.error('❌ Erro ao inicializar sistema de monitoramento:', error);
+    // Não bloqueia a inicialização do servidor
+  }
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 5: Instalar Dependências
+═══════════════════════════════════════════════════════════════════════════════
+
+Execute os comandos:
+
+cd /c/Projetos/VoaLive
+npm install bullmq axios
+npx playwright install chromium --with-deps
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 6: Compilar
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run build
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 7: Testar Localmente
+═══════════════════════════════════════════════════════════════════════════════
+
+npm run dev
+
+Verificar se aparece no console:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 Inicializando Sistema de Monitoramento de Reservas
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Sistema de filas inicializado
+✅ Sistema de Monitoramento PRONTO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 8: Deploy em Produção
+═══════════════════════════════════════════════════════════════════════════════
+
+./deploy-airline-monitoring.sh
+
+═══════════════════════════════════════════════════════════════════════════════
+PASSO 9: Testar em Produção
+═══════════════════════════════════════════════════════════════════════════════
+
+./test-monitoring-production.sh 159.89.80.179:3012
+
+═══════════════════════════════════════════════════════════════════════════════
+VERIFICAÇÕES
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Importações adicionadas
+✓ Rotas registradas
+✓ Graceful shutdown configurado
+✓ Sistema inicializado no startup
+✓ Dependências instaladas
+✓ Build concluído
+✓ Testes locais OK
+✓ Deploy executado
+✓ Testes em produção OK
+
+═══════════════════════════════════════════════════════════════════════════════
+ENDPOINTS DISPONÍVEIS APÓS INTEGRAÇÃO
+═══════════════════════════════════════════════════════════════════════════════
+
+POST   /api/monitoring/bookings
+GET    /api/monitoring/bookings/:pnr
+DELETE /api/monitoring/bookings/:pnr
+POST   /api/monitoring/bookings/:pnr/check
+GET    /api/monitoring/airlines
+GET    /api/monitoring/queue/stats
+POST   /api/monitoring/queue/clean
+POST   /api/monitoring/webhook/test
+GET    /api/health
+GET    /api/metrics
+
+═══════════════════════════════════════════════════════════════════════════════
+TESTE RÁPIDO
+═══════════════════════════════════════════════════════════════════════════════
+
+curl http://localhost:4000/api/monitoring/airlines
+
+Deve retornar:
+{
+  "success": true,
+  "data": ["LATAM", "GOL", "AZUL"]
+}
+
+═══════════════════════════════════════════════════════════════════════════════
