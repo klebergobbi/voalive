@@ -237,11 +237,11 @@ function DashboardContent() {
                 <button
                   onClick={() => {
                     setShowSearchModal(false);
-                    window.location.href = '/bookings';
+                    window.location.href = '/flights';
                   }}
                   className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
                 >
-                  Ver Todas as Reservas
+                  Ver Todos os Voos
                 </button>
               </div>
 
@@ -262,7 +262,7 @@ function DashboardContent() {
         onClose={() => setShowBookingRegisterModal(false)}
         onSuccess={() => {
           setShowBookingRegisterModal(false);
-          window.location.href = '/bookings';
+          window.location.href = '/flights';
         }}
       />
     </>

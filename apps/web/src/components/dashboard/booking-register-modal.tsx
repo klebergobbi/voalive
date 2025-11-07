@@ -157,9 +157,9 @@ export function BookingRegisterModal({ isOpen, onClose, onSuccess }: BookingRegi
         console.log('✅ Reserva salva com sucesso!');
         setSaved(true);
 
-        // Redirecionar para página de reservas após salvar
+        // Redirecionar para página de voos após salvar
         setTimeout(() => {
-          window.location.href = '/bookings';
+          window.location.href = '/flights';
         }, 2000);
       } else {
         setError(result.error || 'Erro ao salvar reserva');
