@@ -54,7 +54,7 @@ export class NotificationService {
           message: data.message,
           actionUrl: data.actionUrl,
           metadata: data.metadata ? JSON.stringify(data.metadata) : null,
-          read: false,
+          readAt: null,
         }
       });
 
@@ -168,7 +168,6 @@ export class NotificationService {
     return prisma.notification.update({
       where: { id: notificationId },
       data: {
-        read: true,
         readAt: new Date()
       }
     });
@@ -179,7 +178,7 @@ export class NotificationService {
    */
   async getUnreadNotifications(limit: number = 50) {
     return prisma.notification.findMany({
-      where: { read: false },
+      where: { readAt: null },
       orderBy: [
         { priority: 'desc' },
         { createdAt: 'desc' }
@@ -207,7 +206,7 @@ export class NotificationService {
     const result = await prisma.notification.deleteMany({
       where: {
         createdAt: { lt: thirtyDaysAgo },
-        read: true
+        readAt: { not: null }
       }
     });
 
