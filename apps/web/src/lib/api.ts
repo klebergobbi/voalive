@@ -177,6 +177,7 @@ class ApiService {
   }
 
   // Flight CRUD Methods (Database)
+  // ATUALIZADO: Agora busca da tabela ExternalBooking ao invés de Flight
   async getAllFlights(filters?: {
     status?: string;
     airline?: string;
@@ -187,17 +188,46 @@ class ApiService {
     limit?: number;
     offset?: number;
   }) {
+    const page = filters?.offset ? Math.floor(filters.offset / (filters.limit || 20)) + 1 : 1;
+    const pageSize = filters?.limit || 100;
+
     const queryParams = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
+    queryParams.append('page', String(page));
+    queryParams.append('pageSize', String(pageSize));
 
     const query = queryParams.toString();
-    return this.request(`/api/flights${query ? `?${query}` : ''}`);
+    const response = await this.request(`/api/v2/external-booking/list${query ? `?${query}` : ''}`);
+
+    // Transformar dados de ExternalBooking para formato Flight esperado pelo frontend
+    if (response.success && response.data) {
+      const transformedData = response.data.map((booking: any) => ({
+        id: booking.id,
+        flightNumber: booking.flightNumber,
+        airline: booking.airline,
+        origin: booking.origin,
+        destination: booking.destination,
+        departureTime: booking.departureDate,
+        arrivalTime: booking.arrivalDate,
+        status: booking.bookingStatus || 'SCHEDULED',
+        checkInStatus: booking.checkInStatus || 'PENDING',
+        locator: booking.bookingCode,
+        passengerFirstName: booking.firstName || booking.fullName?.split(' ')[0] || '',
+        passengerLastName: booking.lastName,
+        seat: booking.seat,
+        gate: booking.gate,
+        terminal: booking.terminal,
+        class: booking.class,
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt
+      }));
+
+      return {
+        success: true,
+        data: transformedData
+      };
+    }
+
+    return response;
   }
 
   async getFlightById(id: string) {
