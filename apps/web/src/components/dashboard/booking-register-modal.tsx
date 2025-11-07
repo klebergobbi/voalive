@@ -287,13 +287,6 @@ export function BookingRegisterModal({ isOpen, onClose, onSuccess }: BookingRegi
             <p className="text-xs text-gray-500">Código IATA do aeroporto de origem (3 letras)</p>
           </div>
 
-          {/* Aviso informativo */}
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>ℹ️ Como funciona:</strong> Preencha os dados da sua reserva. O sistema buscará informações em tempo real via Amadeus + APIs híbridas para validar e complementar os dados do voo.
-            </p>
-          </div>
-
           {/* Success State */}
           {flightInfo && !error && (
             <div className="p-4 bg-green-50 border border-green-200 rounded-lg space-y-3">
