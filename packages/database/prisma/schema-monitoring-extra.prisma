@@ -1,0 +1,108 @@
+// ========================================
+// TABELAS ADICIONAIS PARA MONITORAMENTO
+// ========================================
+// Este arquivo contem tabelas extras que podem ser adicionadas ao schema.prisma
+// Para adicionar: cat schema-monitoring-extra.prisma >> schema.prisma
+// Depois execute: npx prisma db push
+
+// Tabela para rastrear tentativas de monitoramento
+model MonitoringAttempt {
+  id              String    @id @default(cuid())
+
+  // Referencia a reserva
+  bookingCode     String
+  airline         String
+
+  // Dados da tentativa
+  attemptType     String    @default("SCHEDULED")  // SCHEDULED, MANUAL, RETRY
+  status          String    @default("PENDING")    // PENDING, SUCCESS, FAILED
+
+  // Resultado
+  success         Boolean   @default(false)
+  errorMessage    String?
+  errorCode       String?
+
+  // Dados obtidos (se sucesso)
+  dataSnapshot    String?   // JSON com dados obtidos
+  changesDetected Int       @default(0)
+
+  // Metricas
+  durationMs      Int?      // Tempo de execucao em ms
+  creditsUsed     Int       @default(0)  // Creditos ScrapingBee usados
+
+  // Timestamps
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([bookingCode])
+  @@index([airline])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// Tabela para estatisticas diarias
+model MonitoringDailyStats {
+  id              String    @id @default(cuid())
+
+  date            DateTime  @db.Date  // Data (sem hora)
+
+  // Contadores
+  totalChecks     Int       @default(0)
+  successfulChecks Int      @default(0)
+  failedChecks    Int       @default(0)
+  changesDetected Int       @default(0)
+
+  // Por companhia
+  golChecks       Int       @default(0)
+  latamChecks     Int       @default(0)
+  azulChecks      Int       @default(0)
+
+  // Custos
+  creditsUsed     Int       @default(0)
+  estimatedCost   Float     @default(0)
+
+  // Performance
+  avgDurationMs   Int       @default(0)
+  maxDurationMs   Int       @default(0)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([date])
+  @@index([date])
+}
+
+// Tabela para alertas criticos
+model CriticalAlert {
+  id              String    @id @default(cuid())
+
+  // Reserva afetada
+  bookingCode     String
+  airline         String
+
+  // Tipo de alerta
+  alertType       String    // FLIGHT_CANCELLED, MAJOR_TIME_CHANGE, AIRPORT_CHANGE
+  severity        String    @default("HIGH")  // HIGH, CRITICAL
+
+  // Detalhes
+  title           String
+  description     String
+  originalValue   String?
+  newValue        String?
+
+  // Status
+  acknowledged    Boolean   @default(false)
+  acknowledgedAt  DateTime?
+  acknowledgedBy  String?
+
+  // Notificacao
+  notifiedVia     String?   // EMAIL, SMS, PUSH, WHATSAPP
+  notifiedAt      DateTime?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([bookingCode])
+  @@index([alertType])
+  @@index([acknowledged])
+  @@index([createdAt])
+}

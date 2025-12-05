@@ -40,6 +40,10 @@ import { initializeMonitoringSystem, shutdownMonitoringSystem } from './initiali
 import monitoringRoutes from './routes/monitoring.routes';
 import { initializeFlightMonitoring, shutdownFlightMonitoring } from './workers/flight-monitoring.worker';
 
+// NOVO: Sistema de Monitoramento de Reservas com ScrapingBee (PNR + Sobrenome + Origem)
+import reservationMonitoringRoutes from './routes/reservation-monitoring.routes';
+import { getReservationMonitoringWorker } from './workers/reservation-monitoring.worker';
+
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 4000;
@@ -144,6 +148,13 @@ console.log('✅ Sistema de notificações carregado');
 // Sistema de Monitoramento 24/7 (Worker BullMQ + Node-Cron + HTTP)
 app.use('/api/monitoring', monitoringRoutes);
 console.log('✅ Sistema de Monitoramento 24/7 (3 camadas de redundância) carregado');
+
+// NOVO: Sistema de Monitoramento de Reservas (ScrapingBee + 3 campos)
+app.use('/api/v2/monitoring', reservationMonitoringRoutes);
+console.log('✅ Sistema de Monitoramento de Reservas (ScrapingBee) carregado');
+console.log('   POST   /api/v2/monitoring/register');
+console.log('   GET    /api/v2/monitoring/my-reservations');
+console.log('   GET    /api/v2/monitoring/stats/general');
 
 // ============================================================================
 // FLIGHT MONITORING SYSTEM (NEW)
@@ -307,6 +318,17 @@ server.listen(PORT, () => {
       console.error('❌ [Startup] Falha ao iniciar Sistema de Monitoramento 24/7:', error);
     }
   }, 5000); // Aguarda 5 segundos para garantir que Redis e Banco estejam prontos
+
+  // Iniciar Worker de Monitoramento de Reservas (ScrapingBee)
+  setTimeout(() => {
+    try {
+      const reservationWorker = getReservationMonitoringWorker();
+      reservationWorker.start();
+      console.log('✅ [Startup] Reservation Monitoring Worker iniciado');
+    } catch (error) {
+      console.error('❌ [Startup] Falha ao iniciar Reservation Monitoring Worker:', error);
+    }
+  }, 7000);
 
   // Optionally start the scheduler on server startup
   if (process.env.AUTO_START_SCRAPER === 'true') {
