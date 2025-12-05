@@ -66,7 +66,9 @@ export default function LoginPage() {
     try {
       const apiUrl = (typeof window !== 'undefined' && (window as any).__ENV__?.NEXT_PUBLIC_API_URL) ||
                      process.env.NEXT_PUBLIC_API_URL ||
-                     'https://www.reservasegura.pro';
+                     (typeof window !== 'undefined' && window.location.origin.includes('159.89.80.179')
+                       ? 'http://159.89.80.179:3012'
+                       : 'http://localhost:4000');
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -85,12 +87,8 @@ export default function LoginPage() {
       localStorage.setItem('token', data.data.token);
       localStorage.setItem('user', JSON.stringify(data.data.user));
 
-      // Redirecionar para o dashboard de produção
-      if (process.env.NODE_ENV === 'production') {
-        window.location.href = 'https://www.reservasegura.pro/dashboard';
-      } else {
-        router.push('/dashboard');
-      }
+      // Redirecionar para o dashboard
+      router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
